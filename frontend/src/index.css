@@ -1,0 +1,9 @@
+body { background-color: #f8f9fa; }
+
+.badge-grade-A { background-color: #198754; }
+.badge-grade-B { background-color: #0d6efd; }
+.badge-grade-C { background-color: #ffc107; color: #000; }
+.badge-grade-D { background-color: #fd7e14; }
+.badge-grade-F { background-color: #dc3545; }
+
+.btn-xs { padding: 0.15rem 0.5rem; font-size: 0.75rem; }
