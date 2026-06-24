@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { getNotifications, markRead, markAllRead } from "../api/notifications";
 import LoadingSpinner from "../components/LoadingSpinner";
 import type { Notification } from "../types";
@@ -6,6 +7,7 @@ import type { Notification } from "../types";
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -19,6 +21,11 @@ export default function NotificationsPage() {
 
   const handleMarkRead = (pk: number) => void markRead(pk).then(load);
   const handleMarkAll  = () => void markAllRead().then(load);
+
+  const handleOpen = (n: Notification) => {
+    if (!n.is_read) void markRead(n.id).then(load);
+    if (n.link) navigate(n.link);
+  };
 
   if (loading) return <LoadingSpinner />;
 
@@ -37,7 +44,10 @@ export default function NotificationsPage() {
         {notifications.map((n) => (
           <div
             key={n.id}
-            className={`list-group-item list-group-item-action d-flex justify-content-between align-items-start ${!n.is_read ? "list-group-item-light fw-semibold" : ""}`}
+            role={n.link ? "button" : undefined}
+            onClick={n.link ? () => handleOpen(n) : undefined}
+            className={`list-group-item list-group-item-action d-flex justify-content-between align-items-start ${!n.is_read ? "list-group-item-light fw-semibold" : ""} ${n.link ? "cursor-pointer" : ""}`}
+            style={n.link ? { cursor: "pointer" } : undefined}
           >
             <div>
               <small className="text-muted">[{n.notification_type}]</small>
@@ -48,7 +58,7 @@ export default function NotificationsPage() {
             {!n.is_read && (
               <button
                 className="btn btn-sm btn-outline-primary ms-3 flex-shrink-0"
-                onClick={() => handleMarkRead(n.id)}
+                onClick={(e) => { e.stopPropagation(); handleMarkRead(n.id); }}
               >
                 Mark read
               </button>

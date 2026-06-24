@@ -19,6 +19,8 @@ export type APRStatus =
 export interface StudentProfile {
   id: number;
   email: string;
+  first_name: string;
+  last_name: string;
   full_name: string;
   phone_number: string;
   matric_number: string;
@@ -31,6 +33,8 @@ export interface StudentProfile {
 export interface LecturerProfile {
   id: number;
   email: string;
+  first_name: string;
+  last_name: string;
   full_name: string;
   staff_id: string;
   specialization: string;

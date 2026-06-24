@@ -33,7 +33,7 @@ class FeeStatusView(APIView):
         year = _current_academic_year()
         try:
             fee = FeePayment.objects.get(
-                student=request.user.studentprofile, academic_year=year
+                student=request.user.student_profile, academic_year=year
             )
             return Response(FeePaymentSerializer(fee).data)
         except FeePayment.DoesNotExist:
@@ -48,9 +48,9 @@ class ManualPaymentView(APIView):
     def post(self, request):
         year = _current_academic_year()
         if FeePayment.objects.filter(
-            student=request.user.studentprofile,
+            student=request.user.student_profile,
             academic_year=year,
-            status__in=[FeePayment.APPROVED, FeePayment.PENDING],
+            status__in=[FeePayment.Status.APPROVED, FeePayment.Status.PENDING],
         ).exists():
             return Response(
                 {"detail": "A payment record already exists for this year."},
@@ -62,12 +62,12 @@ class ManualPaymentView(APIView):
             return Response({"detail": "Receipt file is required."}, status=400)
 
         fee = FeePayment.objects.create(
-            student=request.user.studentprofile,
+            student=request.user.student_profile,
             academic_year=year,
             amount=request.data.get("amount", 0),
-            payment_method=FeePayment.MANUAL,
+            payment_method=FeePayment.PaymentMethod.MANUAL,
             receipt_file=receipt,
-            status=FeePayment.PENDING,
+            status=FeePayment.Status.PENDING,
         )
         return Response(FeePaymentSerializer(fee).data, status=201)
 
@@ -80,9 +80,9 @@ class InitiateOnlinePaymentView(APIView):
         import requests as http_req
         year = _current_academic_year()
         if FeePayment.objects.filter(
-            student=request.user.studentprofile,
+            student=request.user.student_profile,
             academic_year=year,
-            status=FeePayment.APPROVED,
+            status=FeePayment.Status.APPROVED,
         ).exists():
             return Response({"detail": "Fee already paid for this year."}, status=400)
 
@@ -91,7 +91,7 @@ class InitiateOnlinePaymentView(APIView):
             "email": request.user.email,
             "amount": amount_kobo,
             "metadata": {
-                "student_id": request.user.studentprofile.id,
+                "student_id": request.user.student_profile.id,
                 "academic_year": year,
             },
         }
@@ -107,11 +107,11 @@ class InitiateOnlinePaymentView(APIView):
             return Response({"detail": "Paystack initialization failed."}, status=502)
         # Store a pending record
         FeePayment.objects.update_or_create(
-            student=request.user.studentprofile,
+            student=request.user.student_profile,
             academic_year=year,
             defaults={
-                "payment_method": FeePayment.ONLINE,
-                "status": FeePayment.PENDING,
+                "payment_method": FeePayment.PaymentMethod.ONLINE,
+                "status": FeePayment.Status.PENDING,
                 "transaction_reference": data["data"]["reference"],
                 "amount": request.data.get("amount", 50000),
             }
@@ -147,7 +147,7 @@ class PaystackWebhookView(APIView):
         except FeePayment.DoesNotExist:
             return Response(status=200)
 
-        fee.status = FeePayment.APPROVED
+        fee.status = FeePayment.Status.APPROVED
         fee.approved_at = timezone.now()
         fee.save()
         notify(
@@ -181,7 +181,7 @@ class AdminApproveFeeView(APIView):
 
         action = request.data.get("action")
         if action == "approve":
-            fee.status = FeePayment.APPROVED
+            fee.status = FeePayment.Status.APPROVED
             fee.approved_at = timezone.now()
             fee.save()
             notify(
@@ -192,7 +192,7 @@ class AdminApproveFeeView(APIView):
             )
             return Response({"detail": "Fee approved."})
         elif action == "reject":
-            fee.status = FeePayment.REJECTED
+            fee.status = FeePayment.Status.REJECTED
             fee.rejection_reason = request.data.get("reason", "")
             fee.save()
             notify(

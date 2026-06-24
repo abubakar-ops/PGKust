@@ -12,13 +12,25 @@ from .models import CustomUser, StudentProfile, LecturerProfile, AdminProfile
 from .serializers import (
     StudentRegistrationSerializer, LecturerRegistrationSerializer,
     UserMeSerializer, StudentProfileSerializer, LecturerProfileSerializer,
+    AdminUpdateStudentSerializer, AdminUpdateLecturerSerializer,
+    PGMSTokenObtainPairSerializer,
 )
 from .permissions import IsAdmin, IsStudent, IsLecturer
 
 
+def _notify_admins(title, message, link=''):
+    for admin in CustomUser.objects.filter(role=CustomUser.Role.ADMIN):
+        notify(recipient=admin, title=title, message=message,
+               notification_type='REGISTRATION', link=link)
+
+
 class LoginView(TokenObtainPairView):
-    """POST /api/auth/login/  — returns access + refresh tokens."""
+    """POST /api/auth/login/  — returns access + refresh tokens.
+
+    Rejects pending students/lecturers (see PGMSTokenObtainPairSerializer).
+    """
     permission_classes = [AllowAny]
+    serializer_class = PGMSTokenObtainPairSerializer
 
 
 class LogoutView(APIView):
@@ -72,6 +84,11 @@ class StudentRegisterView(APIView):
                 admission_year=data['admission_year'],
                 status=StudentProfile.Status.PENDING,
             )
+        _notify_admins(
+            title='New Student Registration',
+            message=f'{user.get_full_name()} ({data["matric_number"]}) has registered and is awaiting approval.',
+            link='/admin/students',
+        )
         return Response(
             {'success': True, 'detail': 'Registration submitted. Await PG Coordinator approval.'},
             status=status.HTTP_201_CREATED,
@@ -102,8 +119,13 @@ class LecturerRegisterView(APIView):
                 staff_id=data['staff_id'],
                 specialization=data.get('specialization', ''),
                 is_supervisor=data.get('is_supervisor', False),
-                status='PENDING',
+                status=LecturerProfile.Status.PENDING,
             )
+        _notify_admins(
+            title='New Lecturer Registration',
+            message=f'{user.get_full_name()} ({data["staff_id"]}) has registered and is awaiting approval.',
+            link='/admin/lecturers',
+        )
         return Response(
             {'success': True, 'detail': 'Registration submitted. Await HoD approval.'},
             status=status.HTTP_201_CREATED,
@@ -115,9 +137,25 @@ class PendingStudentsView(APIView):
     permission_classes = [IsAdmin]
 
     def get(self, request):
-        qs = StudentProfile.objects.filter(status=StudentProfile.PENDING).select_related('user')
+        qs = StudentProfile.objects.filter(status=StudentProfile.Status.PENDING).select_related('user')
         serializer = StudentProfileSerializer(qs, many=True)
         return Response(serializer.data)
+
+
+class AdminUpdateStudentView(APIView):
+    """PATCH /api/accounts/admin/students/<pk>/  — edit name, contact, matric no., programme, year."""
+    permission_classes = [IsAdmin]
+
+    def patch(self, request, pk):
+        try:
+            profile = StudentProfile.objects.select_related('user').get(pk=pk)
+        except StudentProfile.DoesNotExist:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = AdminUpdateStudentSerializer(profile, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response({'success': False, 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(StudentProfileSerializer(profile).data)
 
 
 class ApproveStudentView(APIView):
@@ -132,7 +170,7 @@ class ApproveStudentView(APIView):
 
         action = request.data.get('action')
         if action == 'approve':
-            profile.status = StudentProfile.ACTIVE
+            profile.status = StudentProfile.Status.ACTIVE
             profile.save()
             notify(
                 recipient=profile.user,
@@ -142,7 +180,7 @@ class ApproveStudentView(APIView):
             )
             return Response({'detail': 'Student approved.'})
         elif action == 'reject':
-            profile.status = StudentProfile.SUSPENDED
+            profile.status = StudentProfile.Status.SUSPENDED
             profile.save()
             notify(
                 recipient=profile.user,
@@ -160,9 +198,25 @@ class PendingLecturersView(APIView):
     permission_classes = [IsAdmin]
 
     def get(self, request):
-        qs = LecturerProfile.objects.filter(status=LecturerProfile.PENDING).select_related('user')
+        qs = LecturerProfile.objects.filter(status=LecturerProfile.Status.PENDING).select_related('user')
         serializer = LecturerProfileSerializer(qs, many=True)
         return Response(serializer.data)
+
+
+class AdminUpdateLecturerView(APIView):
+    """PATCH /api/accounts/admin/lecturers/<pk>/  — edit name, contact, staff ID, specialization."""
+    permission_classes = [IsAdmin]
+
+    def patch(self, request, pk):
+        try:
+            profile = LecturerProfile.objects.select_related('user').get(pk=pk)
+        except LecturerProfile.DoesNotExist:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = AdminUpdateLecturerSerializer(profile, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response({'success': False, 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(LecturerProfileSerializer(profile).data)
 
 
 class ApproveLecturerView(APIView):
@@ -177,7 +231,7 @@ class ApproveLecturerView(APIView):
 
         action = request.data.get('action')
         if action == 'approve':
-            profile.status = LecturerProfile.ACTIVE
+            profile.status = LecturerProfile.Status.ACTIVE
             profile.save()
             notify(
                 recipient=profile.user,
@@ -187,6 +241,6 @@ class ApproveLecturerView(APIView):
             )
             return Response({'detail': 'Lecturer approved.'})
         elif action == 'reject':
-            profile.status = LecturerProfile.PENDING  # stays pending; admin can note separately
+            profile.status = LecturerProfile.Status.PENDING  # stays pending; admin can note separately
             return Response({'detail': 'Lecturer approval withheld.'})
         return Response({'detail': 'Invalid action.'}, status=status.HTTP_400_BAD_REQUEST)

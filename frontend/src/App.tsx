@@ -9,6 +9,8 @@ import LecturerRegisterPage from "./pages/auth/LecturerRegisterPage";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import LecturerDashboard from "./pages/lecturer/LecturerDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminStudentsPage from "./pages/admin/AdminStudentsPage";
+import AdminLecturersPage from "./pages/admin/AdminLecturersPage";
 import NotificationsPage from "./pages/NotificationsPage";
 
 function RoleRedirect() {
@@ -51,6 +53,8 @@ export default function App() {
           {/* Admin */}
           <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/students" element={<AdminStudentsPage />} />
+            <Route path="/admin/lecturers" element={<AdminLecturersPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,22 +1,51 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { getNotifications } from "../api/notifications";
-import type { StudentProfile } from "../types";
+import { getNotifications, markRead, markAllRead } from "../api/notifications";
+import type { StudentProfile, Notification } from "../types";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [unread, setUnread] = useState(0);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const loadNotifications = () => {
+    if (!user) return;
+    void getNotifications()
+      .then(({ data }) => {
+        setUnread(data.count);
+        setNotifications(data.results);
+      })
+      .catch(() => { /* ignore */ });
+  };
+
+  useEffect(loadNotifications, [user]);
 
   useEffect(() => {
-    if (!user) return;
-    getNotifications()
-      .then(({ data }) => setUnread(data.count))
-      .catch(() => { /* ignore */ });
-  }, [user]);
+    const onClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
 
   const handleLogout = async () => { await logout(); navigate("/login"); };
+
+  const handleOpenNotification = (n: Notification) => {
+    if (!n.is_read) void markRead(n.id).then(loadNotifications);
+    setShowDropdown(false);
+    if (n.link) navigate(n.link);
+  };
+
+  const handleMarkAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    void markAllRead().then(loadNotifications);
+  };
 
   if (!user) return null;
 
@@ -61,14 +90,58 @@ export default function Navbar() {
             </>}
           </ul>
           <div className="d-flex align-items-center gap-3">
-            <Link to="/notifications" className="text-white position-relative" aria-label="Notifications">
-              <i className="bi bi-bell-fill fs-5" />
-              {unread > 0 && (
-                <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                  {unread}
-                </span>
+            <div className="position-relative" ref={dropdownRef}>
+              <button
+                type="button"
+                className="btn btn-link text-white position-relative p-0 border-0"
+                aria-label="Notifications"
+                onClick={() => setShowDropdown((v) => !v)}
+              >
+                <i className="bi bi-bell-fill fs-5" />
+                {unread > 0 && (
+                  <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    {unread}
+                  </span>
+                )}
+              </button>
+              {showDropdown && (
+                <div
+                  className="dropdown-menu show p-0"
+                  style={{ right: 0, left: "auto", width: 340, maxHeight: 420, overflowY: "auto" }}
+                >
+                  <div className="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                    <span className="fw-bold small">Notifications</span>
+                    <button className="btn btn-sm btn-link p-0" onClick={handleMarkAll}>
+                      Mark all read
+                    </button>
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="text-center text-muted small py-4">No notifications.</div>
+                  ) : (
+                    notifications.slice(0, 10).map((n) => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        className={`dropdown-item py-2 border-bottom ${!n.is_read ? "fw-semibold" : ""}`}
+                        onClick={() => handleOpenNotification(n)}
+                      >
+                        <div className="small text-muted">[{n.notification_type}]</div>
+                        <div>{n.title}</div>
+                        <div className="small text-muted text-truncate">{n.message}</div>
+                        <div className="small text-muted">{new Date(n.created_at).toLocaleString()}</div>
+                      </button>
+                    ))
+                  )}
+                  <Link
+                    to="/notifications"
+                    className="d-block text-center small py-2 border-top"
+                    onClick={() => setShowDropdown(false)}
+                  >
+                    View all
+                  </Link>
+                </div>
               )}
-            </Link>
+            </div>
             <span className="text-white small">{user.first_name} {user.last_name}</span>
             <button className="btn btn-outline-light btn-sm" onClick={() => void handleLogout()}>
               Logout

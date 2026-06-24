@@ -1,7 +1,28 @@
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import CustomUser, StudentProfile, LecturerProfile, AdminProfile
+
+
+class PGMSTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Rejects login for students/lecturers whose registration is not yet approved."""
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        user = self.user
+        if user.role == CustomUser.Role.STUDENT:
+            profile = getattr(user, 'student_profile', None)
+            if profile and profile.status != StudentProfile.Status.ACTIVE:
+                raise AuthenticationFailed(
+                    'Your student registration is pending approval.', code='account_pending')
+        elif user.role == CustomUser.Role.LECTURER:
+            profile = getattr(user, 'lecturer_profile', None)
+            if profile and profile.status != 'ACTIVE':
+                raise AuthenticationFailed(
+                    'Your lecturer account is pending approval.', code='account_pending')
+        return data
 
 
 class StudentRegistrationSerializer(serializers.Serializer):
@@ -68,14 +89,17 @@ class LecturerRegistrationSerializer(serializers.Serializer):
 
 class StudentProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source='user.email', read_only=True)
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
     full_name = serializers.SerializerMethodField()
     phone_number = serializers.CharField(source='user.phone_number', read_only=True)
+    profile_picture = serializers.ImageField(source='user.profile_picture', read_only=True)
 
     class Meta:
         model = StudentProfile
         fields = [
-            'id', 'email', 'full_name', 'phone_number', 'matric_number',
-            'programme', 'admission_year', 'status', 'profile_picture',
+            'id', 'email', 'first_name', 'last_name', 'full_name', 'phone_number',
+            'matric_number', 'programme', 'admission_year', 'status', 'profile_picture',
         ]
         read_only_fields = ['id', 'email', 'matric_number', 'status']
 
@@ -83,17 +107,69 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         return obj.user.get_full_name()
 
 
+class AdminUpdateStudentSerializer(serializers.ModelSerializer):
+    """Admin-only: edit a student's name, contact, and profile details (not email/status)."""
+    first_name = serializers.CharField(source='user.first_name', max_length=150, required=False)
+    last_name = serializers.CharField(source='user.last_name', max_length=150, required=False)
+    phone_number = serializers.CharField(source='user.phone_number', max_length=20, required=False, allow_blank=True)
+
+    class Meta:
+        model = StudentProfile
+        fields = ['first_name', 'last_name', 'phone_number', 'matric_number', 'programme', 'admission_year']
+
+    def validate_matric_number(self, value):
+        qs = StudentProfile.objects.filter(matric_number__iexact=value).exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError('This matric number is already registered.')
+        return value.upper()
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop('user', {})
+        if user_data:
+            for attr, val in user_data.items():
+                setattr(instance.user, attr, val)
+            instance.user.save()
+        return super().update(instance, validated_data)
+
+
 class LecturerProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source='user.email', read_only=True)
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
     full_name = serializers.SerializerMethodField()
 
     class Meta:
         model = LecturerProfile
-        fields = ['id', 'email', 'full_name', 'staff_id', 'specialization', 'is_supervisor', 'status']
+        fields = ['id', 'email', 'first_name', 'last_name', 'full_name', 'staff_id', 'specialization', 'is_supervisor', 'status']
         read_only_fields = ['id', 'email', 'staff_id', 'status']
 
     def get_full_name(self, obj):
         return obj.user.get_full_name()
+
+
+class AdminUpdateLecturerSerializer(serializers.ModelSerializer):
+    """Admin-only: edit a lecturer's name, contact, and profile details (not email/status)."""
+    first_name = serializers.CharField(source='user.first_name', max_length=150, required=False)
+    last_name = serializers.CharField(source='user.last_name', max_length=150, required=False)
+    phone_number = serializers.CharField(source='user.phone_number', max_length=20, required=False, allow_blank=True)
+
+    class Meta:
+        model = LecturerProfile
+        fields = ['first_name', 'last_name', 'phone_number', 'staff_id', 'specialization', 'is_supervisor']
+
+    def validate_staff_id(self, value):
+        qs = LecturerProfile.objects.filter(staff_id__iexact=value).exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError('This staff ID is already registered.')
+        return value.upper()
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop('user', {})
+        if user_data:
+            for attr, val in user_data.items():
+                setattr(instance.user, attr, val)
+            instance.user.save()
+        return super().update(instance, validated_data)
 
 
 class AdminProfileSerializer(serializers.ModelSerializer):

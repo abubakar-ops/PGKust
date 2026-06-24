@@ -21,7 +21,7 @@ class IsActiveStudent(BasePermission):
         if not (request.user and request.user.is_authenticated and request.user.is_student):
             return False
         try:
-            return request.user.studentprofile.is_active
+            return request.user.student_profile.is_active
         except Exception:
             return False
 
@@ -31,7 +31,7 @@ class IsActiveLecturer(BasePermission):
         if not (request.user and request.user.is_authenticated and request.user.is_lecturer):
             return False
         try:
-            return request.user.lecturerprofile.is_active
+            return request.user.lecturer_profile.is_active
         except Exception:
             return False
 
@@ -41,7 +41,7 @@ class IsPGCoordinator(BasePermission):
         if not (request.user and request.user.is_authenticated and request.user.is_admin_user):
             return False
         try:
-            return request.user.adminprofile.is_pg_coordinator
+            return request.user.admin_profile.is_pg_coordinator
         except Exception:
             return False
 
@@ -51,6 +51,6 @@ class IsHoD(BasePermission):
         if not (request.user and request.user.is_authenticated and request.user.is_admin_user):
             return False
         try:
-            return request.user.adminprofile.is_hod
+            return request.user.admin_profile.is_hod
         except Exception:
             return False

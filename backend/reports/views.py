@@ -17,7 +17,7 @@ class APRListView(APIView):
     def get(self, request):
         if request.user.is_student:
             qs = AnnualProgressReport.objects.filter(
-                student=request.user.studentprofile
+                student=request.user.student_profile
             ).select_related("session")
         elif request.user.is_admin_user:
             qs = AnnualProgressReport.objects.all().select_related("student__user", "session")
@@ -27,7 +27,7 @@ class APRListView(APIView):
         else:
             # Supervisor sees supervised students
             qs = AnnualProgressReport.objects.filter(
-                student__supervisor=request.user.lecturerprofile
+                student__supervisor=request.user.lecturer_profile
             ).select_related("student__user", "session")
         return Response(APRSerializer(qs, many=True).data)
 
@@ -37,7 +37,7 @@ class APRCreateView(APIView):
     permission_classes = [IsActiveStudent]
 
     def post(self, request):
-        profile = request.user.studentprofile
+        profile = request.user.student_profile
         if not profile.is_phd:
             return Response({"detail": "Only PhD students can submit APRs."}, status=403)
 
@@ -59,7 +59,7 @@ class APRCreateView(APIView):
             publications=data.get("publications", ""),
             issues_concerns=data.get("issues_concerns", ""),
             next_year_plan=data.get("next_year_plan", ""),
-            status=AnnualProgressReport.DRAFT,
+            status=AnnualProgressReport.Status.DRAFT,
         )
         return Response(APRSerializer(apr).data, status=201)
 
@@ -73,20 +73,20 @@ class APRDetailView(APIView):
         except AnnualProgressReport.DoesNotExist:
             return Response({"detail": "Not found."}, status=404)
         # Access control
-        if request.user.is_student and apr.student != request.user.studentprofile:
+        if request.user.is_student and apr.student != request.user.student_profile:
             return Response({"detail": "Forbidden."}, status=403)
         if request.user.is_lecturer:
-            if apr.student.supervisor != request.user.lecturerprofile:
+            if apr.student.supervisor != request.user.lecturer_profile:
                 return Response({"detail": "Forbidden."}, status=403)
         return Response(APRSerializer(apr).data)
 
     def patch(self, request, pk):
         """Student updates draft APR fields."""
         try:
-            apr = AnnualProgressReport.objects.get(pk=pk, student=request.user.studentprofile)
+            apr = AnnualProgressReport.objects.get(pk=pk, student=request.user.student_profile)
         except AnnualProgressReport.DoesNotExist:
             return Response({"detail": "Not found."}, status=404)
-        if apr.status != AnnualProgressReport.DRAFT:
+        if apr.status != AnnualProgressReport.Status.DRAFT:
             return Response({"detail": "Only DRAFT APRs can be edited."}, status=400)
         editable_fields = [
             "year_of_study", "research_progress", "training_activities",
@@ -107,14 +107,14 @@ class APRSubmitView(APIView):
         try:
             apr = AnnualProgressReport.objects.select_related(
                 "student__supervisor__user"
-            ).get(pk=pk, student=request.user.studentprofile)
+            ).get(pk=pk, student=request.user.student_profile)
         except AnnualProgressReport.DoesNotExist:
             return Response({"detail": "Not found."}, status=404)
 
-        if apr.status != AnnualProgressReport.DRAFT:
+        if apr.status != AnnualProgressReport.Status.DRAFT:
             return Response({"detail": "APR must be in DRAFT to submit."}, status=400)
 
-        apr.status = AnnualProgressReport.SUBMITTED
+        apr.status = AnnualProgressReport.Status.SUBMITTED
         apr.submitted_at = timezone.now()
         apr.save()
 
@@ -136,14 +136,14 @@ class APRSupervisorEndorseView(APIView):
         try:
             apr = AnnualProgressReport.objects.select_related(
                 "student__user", "student__supervisor"
-            ).get(pk=pk, student__supervisor=request.user.lecturerprofile)
+            ).get(pk=pk, student__supervisor=request.user.lecturer_profile)
         except AnnualProgressReport.DoesNotExist:
             return Response({"detail": "Not found."}, status=404)
 
-        if apr.status != AnnualProgressReport.SUBMITTED:
+        if apr.status != AnnualProgressReport.Status.SUBMITTED:
             return Response({"detail": "APR must be SUBMITTED to endorse."}, status=400)
 
-        apr.status = AnnualProgressReport.SUPERVISOR_ENDORSED
+        apr.status = AnnualProgressReport.Status.SUPERVISOR_ENDORSED
         apr.supervisor_comments = request.data.get("comments", "")
         apr.supervisor_endorsed_at = timezone.now()
         apr.save()
@@ -172,15 +172,15 @@ class APRCoordinatorApproveView(APIView):
         except AnnualProgressReport.DoesNotExist:
             return Response({"detail": "Not found."}, status=404)
 
-        if apr.status != AnnualProgressReport.SUPERVISOR_ENDORSED:
+        if apr.status != AnnualProgressReport.Status.SUPERVISOR_ENDORSED:
             return Response({"detail": "APR must be SUPERVISOR_ENDORSED."}, status=400)
 
         action = request.data.get("action")
         if action == "approve":
-            apr.status = AnnualProgressReport.COORDINATOR_APPROVED
+            apr.status = AnnualProgressReport.Status.COORDINATOR_APPROVED
             apr.coordinator_comments = request.data.get("comments", "")
             apr.coordinator_approved_at = timezone.now()
-            apr.coordinator = request.user.adminprofile
+            apr.coordinator = request.user.admin_profile
             apr.progression_cleared = True
             apr.save()
             notify(apr.student.user, "APR Approved",
@@ -192,7 +192,7 @@ class APRCoordinatorApproveView(APIView):
                        "APR")
             return Response({"detail": "APR approved. Student cleared for next semester."})
         elif action == "reject":
-            apr.status = AnnualProgressReport.REJECTED
+            apr.status = AnnualProgressReport.Status.REJECTED
             apr.coordinator_comments = request.data.get("comments", "")
             apr.save()
             notify(apr.student.user, "APR Not Approved",
@@ -215,10 +215,10 @@ class TranscriptView(APIView):
         from results.serializers import ResultSerializer, SemesterGPASerializer, CumulativeGPASerializer
         from django.template.loader import render_to_string
 
-        profile = request.user.studentprofile
+        profile = request.user.student_profile
         results = Result.objects.filter(
             enrollment__student=profile,
-            batch__status=SemesterResultBatch.APPROVED,
+            batch__status=SemesterResultBatch.Status.APPROVED,
         ).select_related("enrollment__allocation__course", "batch__session")
 
         try:

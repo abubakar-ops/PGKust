@@ -25,8 +25,11 @@ api.interceptors.response.use(
         return Promise.reject(err);
       }
       try {
-        const { data } = await axios.post<{ access: string }>("/api/auth/refresh/", { refresh });
+        const { data } = await axios.post<{ access: string; refresh: string }>(
+          "/api/auth/refresh/", { refresh }
+        );
         localStorage.setItem("access", data.access);
+        localStorage.setItem("refresh", data.refresh);
         original.headers.Authorization = `Bearer ${data.access}`;
         return api(original);
       } catch {

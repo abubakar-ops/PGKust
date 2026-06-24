@@ -19,8 +19,8 @@ class StudentResultsView(APIView):
 
     def get(self, request):
         qs = Result.objects.filter(
-            enrollment__student=request.user.studentprofile,
-            batch__status=SemesterResultBatch.APPROVED,
+            enrollment__student=request.user.student_profile,
+            batch__status=SemesterResultBatch.Status.APPROVED,
         ).select_related(
             "enrollment__allocation__course", "batch__session"
         )
@@ -38,7 +38,7 @@ class StudentGPAView(APIView):
     permission_classes = [IsActiveStudent]
 
     def get(self, request):
-        profile = request.user.studentprofile
+        profile = request.user.student_profile
         semester_gpas = SemesterGPA.objects.filter(
             student=profile
         ).select_related("session").order_by("session__start_date", "semester")
@@ -66,7 +66,7 @@ class LecturerResultUploadView(APIView):
         except SemesterResultBatch.DoesNotExist:
             return Response({"detail": "Batch not found."}, status=404)
 
-        if batch.status == SemesterResultBatch.APPROVED:
+        if batch.status == SemesterResultBatch.Status.APPROVED:
             return Response({"detail": "Cannot modify an approved batch."}, status=400)
 
         errors = []
@@ -125,10 +125,10 @@ class ApproveBatchView(APIView):
         comment = request.data.get("comment", "")
         if action == "approve":
             from django.utils import timezone
-            batch.status = SemesterResultBatch.APPROVED
+            batch.status = SemesterResultBatch.Status.APPROVED
             batch.coordinator_comment = comment
             batch.approved_at = timezone.now()
-            batch.approved_by = request.user.adminprofile
+            batch.approved_by = request.user.admin_profile
             batch.save()
             # Notify all affected students
             results = Result.objects.filter(batch=batch).select_related(
@@ -143,7 +143,7 @@ class ApproveBatchView(APIView):
                 )
             return Response({"detail": "Batch approved and students notified."})
         elif action == "reject":
-            batch.status = SemesterResultBatch.REJECTED
+            batch.status = SemesterResultBatch.Status.REJECTED
             batch.coordinator_comment = comment
             batch.save()
             return Response({"detail": "Batch rejected."})

@@ -1,6 +1,37 @@
-﻿from django.contrib.auth.models import AbstractUser
+﻿from django.contrib.auth.base_user import BaseUserManager
+from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
+
+class CustomUserManager(BaseUserManager):
+    """email is the login identifier; username is auto-derived since
+    AbstractUser still requires it to be unique and non-null."""
+    use_in_migrations = True
+
+    def _create_user(self, email, password, **extra_fields):
+        if not email:
+            raise ValueError('The Email field must be set')
+        email = self.normalize_email(email)
+        extra_fields.setdefault('username', email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_user(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', False)
+        extra_fields.setdefault('is_superuser', False)
+        return self._create_user(email, password, **extra_fields)
+
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+        return self._create_user(email, password, **extra_fields)
 
 
 class CustomUser(AbstractUser):
@@ -15,7 +46,9 @@ class CustomUser(AbstractUser):
     profile_picture = models.ImageField(upload_to='profiles/', blank=True, null=True)
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
+    REQUIRED_FIELDS = ['first_name', 'last_name']
+
+    objects = CustomUserManager()
 
     class Meta:
         verbose_name = _('User')
@@ -79,14 +112,15 @@ class StudentProfile(models.Model):
 
 
 class LecturerProfile(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', _('Pending Approval')
+        ACTIVE = 'ACTIVE', _('Active')
+
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='lecturer_profile')
     staff_id = models.CharField(max_length=20, unique=True)
     specialization = models.CharField(max_length=100, blank=True)
     is_supervisor = models.BooleanField(default=False, help_text='Can supervise PhD students?')
-    status = models.CharField(
-        max_length=10,
-        choices=[('PENDING', 'Pending Approval'), ('ACTIVE', 'Active')],
-        default='PENDING')
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
 
     class Meta:
         verbose_name = _('Lecturer Profile')
@@ -94,6 +128,10 @@ class LecturerProfile(models.Model):
 
     def __str__(self):
         return f'{self.staff_id} - {self.user.get_full_name()}'
+
+    @property
+    def is_active(self):
+        return self.status == self.Status.ACTIVE
 
 
 class AdminProfile(models.Model):

@@ -38,6 +38,8 @@ class SemesterResultBatchSerializer(serializers.ModelSerializer):
 
 
 class SemesterGPASerializer(serializers.ModelSerializer):
+    credit_units_earned = serializers.IntegerField(source="total_credit_units", read_only=True)
+
     class Meta:
         model = SemesterGPA
         fields = ["id", "session", "semester", "gpa", "credit_units_earned"]

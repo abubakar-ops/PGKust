@@ -48,12 +48,12 @@ class TimetableView(APIView):
 
         if request.user.is_student:
             enrollments = Enrollment.objects.filter(
-                student=request.user.studentprofile, allocation__session=session, status="APPROVED"
+                student=request.user.student_profile, allocation__session=session, status="APPROVED"
             ).select_related("allocation__course", "allocation__lecturer__user")
             allocation_ids = [e.allocation_id for e in enrollments]
         elif request.user.is_lecturer:
             allocations = CourseAllocation.objects.filter(
-                lecturer=request.user.lecturerprofile, session=session
+                lecturer=request.user.lecturer_profile, session=session
             )
             allocation_ids = [a.id for a in allocations]
         else:
@@ -78,12 +78,12 @@ class EnrollView(APIView):
         except CourseAllocation.DoesNotExist:
             return Response({"detail": "Course allocation not found."}, status=404)
 
-        profile = request.user.studentprofile
+        profile = request.user.student_profile
         if Enrollment.objects.filter(student=profile, allocation=allocation).exists():
             return Response({"detail": "Already enrolled."}, status=400)
 
         enrollment = Enrollment.objects.create(
-            student=profile, allocation=allocation, status=Enrollment.PENDING
+            student=profile, allocation=allocation, status=Enrollment.Status.PENDING
         )
         serializer = EnrollmentSerializer(enrollment)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -94,7 +94,7 @@ class StudentEnrollmentListView(APIView):
 
     def get(self, request):
         qs = Enrollment.objects.filter(
-            student=request.user.studentprofile
+            student=request.user.student_profile
         ).select_related("allocation__course", "allocation__session", "allocation__lecturer__user")
         return Response(EnrollmentSerializer(qs, many=True).data)
 
@@ -108,7 +108,7 @@ class LecturerAllocationListView(APIView):
         except AcademicSession.DoesNotExist:
             return Response([])
         qs = CourseAllocation.objects.filter(
-            lecturer=request.user.lecturerprofile, session=session
+            lecturer=request.user.lecturer_profile, session=session
         ).select_related("course", "session")
         return Response(CourseAllocationSerializer(qs, many=True).data)
 
@@ -120,7 +120,7 @@ class MaterialUploadView(APIView):
     def post(self, request, allocation_pk):
         try:
             allocation = CourseAllocation.objects.get(
-                pk=allocation_pk, lecturer=request.user.lecturerprofile
+                pk=allocation_pk, lecturer=request.user.lecturer_profile
             )
         except CourseAllocation.DoesNotExist:
             return Response({"detail": "Allocation not found."}, status=404)
@@ -152,7 +152,7 @@ class MaterialListView(APIView):
 
         if request.user.is_student:
             if not Enrollment.objects.filter(
-                student=request.user.studentprofile, allocation=allocation, status="APPROVED"
+                student=request.user.student_profile, allocation=allocation, status="APPROVED"
             ).exists():
                 return Response({"detail": "Not enrolled."}, status=403)
 
@@ -188,7 +188,7 @@ class AdminEnrollmentListView(APIView):
     permission_classes = [IsAdmin]
 
     def get(self, request):
-        qs = Enrollment.objects.filter(status=Enrollment.PENDING).select_related(
+        qs = Enrollment.objects.filter(status=Enrollment.Status.PENDING).select_related(
             "student__user", "allocation__course", "allocation__session"
         )
         return Response(EnrollmentSerializer(qs, many=True).data)
@@ -205,14 +205,14 @@ class AdminApproveEnrollmentView(APIView):
 
         action = request.data.get("action")
         if action == "approve":
-            enrollment.status = Enrollment.APPROVED
+            enrollment.status = Enrollment.Status.APPROVED
             enrollment.save()
             notify(enrollment.student.user, "Enrollment Approved",
                    f"Your enrollment in {enrollment.allocation.course.title} has been approved.",
                    "ENROLLMENT")
             return Response({"detail": "Enrollment approved."})
         elif action == "reject":
-            enrollment.status = Enrollment.REJECTED
+            enrollment.status = Enrollment.Status.REJECTED
             enrollment.save()
             notify(enrollment.student.user, "Enrollment Rejected",
                    f"Your enrollment in {enrollment.allocation.course.title} was not approved.",

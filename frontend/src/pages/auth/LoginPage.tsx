@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { isAxiosError } from "axios";
 import { useAuth } from "../../context/AuthContext";
 import Alert from "../../components/Alert";
 
@@ -20,8 +21,9 @@ export default function LoginPage() {
       if (user.role === "STUDENT") navigate("/student/dashboard");
       else if (user.role === "LECTURER") navigate("/lecturer/dashboard");
       else navigate("/admin/dashboard");
-    } catch {
-      setError("Invalid email or password.");
+    } catch (err) {
+      const detail = isAxiosError<{ detail?: string }>(err) ? err.response?.data?.detail : undefined;
+      setError(detail || "Invalid email or password.");
     } finally {
       setLoading(false);
     }
