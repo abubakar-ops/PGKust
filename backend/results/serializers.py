@@ -7,12 +7,14 @@ class ResultSerializer(serializers.ModelSerializer):
     course_code = serializers.CharField(source="enrollment.allocation.course.code", read_only=True)
     course_title = serializers.CharField(source="enrollment.allocation.course.title", read_only=True)
     credit_units = serializers.IntegerField(source="enrollment.allocation.course.credit_units", read_only=True)
+    session_name = serializers.CharField(source="batch.session.name", read_only=True)
+    semester = serializers.CharField(source="batch.semester", read_only=True)
 
     class Meta:
         model = Result
-        fields = ["id", "enrollment", "course_code", "course_title",
-                  "credit_units", "score", "grade", "grade_point", "batch"]
-        read_only_fields = ["id", "grade", "grade_point"]
+        fields = ["id", "enrollment", "course_code", "course_title", "credit_units",
+                  "score", "grade", "grade_point", "batch", "session_name", "semester"]
+        read_only_fields = ["id", "grade", "grade_point", "session_name", "semester"]
 
 
 class ResultUploadSerializer(serializers.Serializer):
@@ -33,16 +35,17 @@ class SemesterResultBatchSerializer(serializers.ModelSerializer):
 
     def get_approved_by_name(self, obj):
         if obj.approved_by:
-            return obj.approved_by.user.get_full_name()
+            return obj.approved_by.get_full_name()
         return None
 
 
 class SemesterGPASerializer(serializers.ModelSerializer):
     credit_units_earned = serializers.IntegerField(source="total_credit_units", read_only=True)
+    session_name = serializers.CharField(source="session.name", read_only=True)
 
     class Meta:
         model = SemesterGPA
-        fields = ["id", "session", "semester", "gpa", "credit_units_earned"]
+        fields = ["id", "session", "session_name", "semester", "gpa", "credit_units_earned"]
 
 
 class CumulativeGPASerializer(serializers.ModelSerializer):

@@ -12,6 +12,11 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminStudentsPage from "./pages/admin/AdminStudentsPage";
 import AdminLecturersPage from "./pages/admin/AdminLecturersPage";
 import NotificationsPage from "./pages/NotificationsPage";
+import LecturerMaterialsPage from "./pages/lecturer/LecturerMaterialsPage";
+import StudentCoursesPage from "./pages/student/StudentCoursesPage";
+import LecturerResultsUploadPage from "./pages/lecturer/LecturerResultsUploadPage";
+import StudentResultsPage from "./pages/student/StudentResultsPage";
+import LecturerAllocationsPage from "./pages/lecturer/LecturerAllocationsPage";
 
 function RoleRedirect() {
   const { user, loading } = useAuth();
@@ -43,11 +48,17 @@ export default function App() {
           {/* Student */}
           <Route element={<ProtectedRoute allowedRoles={["STUDENT"]} />}>
             <Route path="/student/dashboard" element={<StudentDashboard />} />
+            <Route path="/student/courses" element={<StudentCoursesPage />} />
+            <Route path="/student/results" element={<StudentResultsPage />} />
+            <Route path="/student/gpa" element={<StudentResultsPage />} />
           </Route>
 
           {/* Lecturer */}
           <Route element={<ProtectedRoute allowedRoles={["LECTURER"]} />}>
             <Route path="/lecturer/dashboard" element={<LecturerDashboard />} />
+            <Route path="/lecturer/allocations" element={<LecturerAllocationsPage />} />
+            <Route path="/lecturer/materials/:allocationId" element={<LecturerMaterialsPage />} />
+            <Route path="/lecturer/results/upload" element={<LecturerResultsUploadPage />} />
           </Route>
 
           {/* Admin */}

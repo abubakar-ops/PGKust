@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from accounts.permissions import IsAdmin, IsActiveStudent, IsActiveLecturer
+from fees.models import FeePayment
 from notifications.utils import notify
 from .models import AcademicSession, Course, CourseAllocation, Timetable, Enrollment, CourseMaterial
 from .serializers import (
@@ -146,15 +147,31 @@ class MaterialUploadView(APIView):
 class MaterialListView(APIView):
     def get(self, request, allocation_pk):
         try:
-            allocation = CourseAllocation.objects.get(pk=allocation_pk)
+            allocation = CourseAllocation.objects.select_related("session").get(pk=allocation_pk)
         except CourseAllocation.DoesNotExist:
             return Response({"detail": "Allocation not found."}, status=404)
 
         if request.user.is_student:
+            profile = getattr(request.user, "student_profile", None)
+            if profile is None or not profile.is_active:
+                return Response({"detail": "Your student profile is not active."}, status=403)
             if not Enrollment.objects.filter(
-                student=request.user.student_profile, allocation=allocation, status="APPROVED"
+                student=profile, allocation=allocation, status="APPROVED"
             ).exists():
                 return Response({"detail": "Not enrolled."}, status=403)
+            session_name = allocation.session.name
+            if not FeePayment.objects.filter(
+                student=profile, academic_year=session_name, status="APPROVED"
+            ).exists():
+                return Response(
+                    {"detail": f"You are not registered for the {session_name} session. "
+                               "Complete your session registration (fee payment) to access materials."},
+                    status=403,
+                )
+        elif request.user.is_lecturer:
+            lecturer = getattr(request.user, "lecturer_profile", None)
+            if lecturer is None or not lecturer.is_active or allocation.lecturer_id != lecturer.id:
+                return Response({"detail": "You are not the lecturer for this course."}, status=403)
 
         materials = CourseMaterial.objects.filter(allocation=allocation)
         return Response(CourseMaterialSerializer(materials, many=True).data)

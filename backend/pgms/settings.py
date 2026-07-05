@@ -157,7 +157,7 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='KUST CS PGMS <noreply
 PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY', default='')
 PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY', default='')
 
-ALLOWED_MATERIAL_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.zip']
+ALLOWED_MATERIAL_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.zip', '.rar']
 MAX_UPLOAD_SIZE_MB = 20
 
 # ─── Production hardening ─────────────────────────────────────────────────────

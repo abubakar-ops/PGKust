@@ -26,16 +26,22 @@ class CourseSerializer(serializers.ModelSerializer):
 class CourseAllocationSerializer(serializers.ModelSerializer):
     course_title = serializers.CharField(source="course.title", read_only=True)
     course_code = serializers.CharField(source="course.code", read_only=True)
+    credit_units = serializers.IntegerField(source="course.credit_units", read_only=True)
     lecturer_name = serializers.SerializerMethodField()
     session_name = serializers.CharField(source="session.name", read_only=True)
+    enrolled_count = serializers.SerializerMethodField()
 
     class Meta:
         model = CourseAllocation
-        fields = ["id", "course", "course_code", "course_title",
-                  "lecturer", "lecturer_name", "session", "session_name", "semester"]
+        fields = ["id", "course", "course_code", "course_title", "credit_units",
+                  "lecturer", "lecturer_name", "session", "session_name", "semester",
+                  "enrolled_count"]
 
     def get_lecturer_name(self, obj):
         return obj.lecturer.user.get_full_name()
+
+    def get_enrolled_count(self, obj):
+        return obj.enrollments.filter(status="APPROVED").count()
 
 
 class TimetableSerializer(serializers.ModelSerializer):

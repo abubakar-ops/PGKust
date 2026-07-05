@@ -136,6 +136,8 @@ export interface Result {
   grade: GradeValue;
   grade_point: string;
   batch: number;
+  session_name: string;
+  semester: Semester;
 }
 
 export interface SemesterResultBatch {
@@ -155,6 +157,7 @@ export interface SemesterResultBatch {
 export interface SemesterGPA {
   id: number;
   session: number;
+  session_name: string;
   semester: Semester;
   gpa: string;
   credit_units_earned: number;
@@ -171,6 +174,20 @@ export interface CumulativeGPA {
 export interface GPAResponse {
   semester_gpas: SemesterGPA[];
   cumulative: CumulativeGPA | null;
+}
+
+export interface ExcelUploadRowError {
+  row: number;
+  registration_no: string;
+  detail: string;
+}
+
+export interface ExcelUploadResponse {
+  uploaded: number;
+  errors: ExcelUploadRowError[];
+  students_without_scores: string[];
+  batch: number;
+  batch_status: string;
 }
 
 // ─── Fees ─────────────────────────────────────────────────────────────────────
