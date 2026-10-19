@@ -1,4 +1,5 @@
-﻿from pathlib import Path
+﻿import sys
+from pathlib import Path
 from datetime import timedelta
 from decouple import config, Csv
 
@@ -78,6 +79,10 @@ DATABASES = {
     }
 }
 
+# Tests run against a throwaway local SQLite DB instead of the shared Postgres server.
+if 'test' in sys.argv:
+    DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}
+
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesStandaloneBackend',
     'django.contrib.auth.backends.ModelBackend',
@@ -96,7 +101,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+STATICFILES_DIRS = []
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -159,6 +164,7 @@ PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY', default='')
 
 ALLOWED_MATERIAL_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.zip', '.rar']
 MAX_UPLOAD_SIZE_MB = 20
+MAX_CREDIT_UNITS_PER_SEMESTER = config('MAX_CREDIT_UNITS_PER_SEMESTER', default=24, cast=int)
 
 # ─── Production hardening ─────────────────────────────────────────────────────
 if not DEBUG:

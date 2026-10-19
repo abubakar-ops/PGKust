@@ -15,11 +15,18 @@ from .serializers import (
     AdminUpdateStudentSerializer, AdminUpdateLecturerSerializer,
     PGMSTokenObtainPairSerializer,
 )
-from .permissions import IsAdmin, IsStudent, IsLecturer
+from .permissions import IsPGCoordinator, IsHoD
 
 
-def _notify_admins(title, message, link=''):
-    for admin in CustomUser.objects.filter(role=CustomUser.Role.ADMIN):
+def _notify_admins(title, message, link='', admin_role=None):
+    """
+    Notify admins, narrowed to one admin role (PG Coordinator / HoD) when given.
+    Falls back to every admin if nobody holds that role, so registrations never go unseen.
+    """
+    admins = CustomUser.objects.filter(role=CustomUser.Role.ADMIN)
+    if admin_role and admins.filter(admin_profile__admin_role=admin_role).exists():
+        admins = admins.filter(admin_profile__admin_role=admin_role)
+    for admin in admins:
         notify(recipient=admin, title=title, message=message,
                notification_type='REGISTRATION', link=link)
 
@@ -88,6 +95,7 @@ class StudentRegisterView(APIView):
             title='New Student Registration',
             message=f'{user.get_full_name()} ({data["matric_number"]}) has registered and is awaiting approval.',
             link='/admin/students',
+            admin_role=AdminProfile.AdminRole.PG_COORDINATOR,
         )
         return Response(
             {'success': True, 'detail': 'Registration submitted. Await PG Coordinator approval.'},
@@ -125,6 +133,7 @@ class LecturerRegisterView(APIView):
             title='New Lecturer Registration',
             message=f'{user.get_full_name()} ({data["staff_id"]}) has registered and is awaiting approval.',
             link='/admin/lecturers',
+            admin_role=AdminProfile.AdminRole.HOD,
         )
         return Response(
             {'success': True, 'detail': 'Registration submitted. Await HoD approval.'},
@@ -134,7 +143,7 @@ class LecturerRegisterView(APIView):
 
 class PendingStudentsView(APIView):
     """GET /api/accounts/admin/students/pending/"""
-    permission_classes = [IsAdmin]
+    permission_classes = [IsPGCoordinator]
 
     def get(self, request):
         qs = StudentProfile.objects.filter(status=StudentProfile.Status.PENDING).select_related('user')
@@ -144,7 +153,7 @@ class PendingStudentsView(APIView):
 
 class AdminUpdateStudentView(APIView):
     """PATCH /api/accounts/admin/students/<pk>/  — edit name, contact, matric no., programme, year."""
-    permission_classes = [IsAdmin]
+    permission_classes = [IsPGCoordinator]
 
     def patch(self, request, pk):
         try:
@@ -160,7 +169,7 @@ class AdminUpdateStudentView(APIView):
 
 class ApproveStudentView(APIView):
     """POST /api/accounts/admin/students/<pk>/approve/  — action: approve | reject"""
-    permission_classes = [IsAdmin]
+    permission_classes = [IsPGCoordinator]
 
     def post(self, request, pk):
         try:
@@ -195,7 +204,7 @@ class ApproveStudentView(APIView):
 
 class PendingLecturersView(APIView):
     """GET /api/accounts/admin/lecturers/pending/"""
-    permission_classes = [IsAdmin]
+    permission_classes = [IsHoD]
 
     def get(self, request):
         qs = LecturerProfile.objects.filter(status=LecturerProfile.Status.PENDING).select_related('user')
@@ -205,7 +214,7 @@ class PendingLecturersView(APIView):
 
 class AdminUpdateLecturerView(APIView):
     """PATCH /api/accounts/admin/lecturers/<pk>/  — edit name, contact, staff ID, specialization."""
-    permission_classes = [IsAdmin]
+    permission_classes = [IsHoD]
 
     def patch(self, request, pk):
         try:
@@ -221,7 +230,7 @@ class AdminUpdateLecturerView(APIView):
 
 class ApproveLecturerView(APIView):
     """POST /api/accounts/admin/lecturers/<pk>/approve/"""
-    permission_classes = [IsAdmin]
+    permission_classes = [IsHoD]
 
     def post(self, request, pk):
         try:
@@ -241,6 +250,17 @@ class ApproveLecturerView(APIView):
             )
             return Response({'detail': 'Lecturer approved.'})
         elif action == 'reject':
-            profile.status = LecturerProfile.Status.PENDING  # stays pending; admin can note separately
-            return Response({'detail': 'Lecturer approval withheld.'})
-        return Response({'detail': 'Invalid action.'}, status=status.HTTP_400_BAD_REQUEST)
+            reason = request.data.get('reason', '')
+            profile.status = LecturerProfile.Status.REJECTED
+            profile.registration_note = reason
+            profile.save()
+            notify(
+                recipient=profile.user,
+                title='Lecturer Registration Rejected',
+                message='Your lecturer registration was not approved.'
+                        + (f' Reason: {reason}' if reason else ' Contact the Head of Department.'),
+                notification_type='REGISTRATION',
+            )
+            return Response({'detail': 'Lecturer rejected.'})
+        return Response({'detail': 'Invalid action. Use approve or reject.'},
+                        status=status.HTTP_400_BAD_REQUEST)

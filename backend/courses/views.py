@@ -1,6 +1,6 @@
 import os
 from django.conf import settings
-from django.db import transaction
+from django.db.models import Sum
 from django.http import FileResponse
 from rest_framework import status
 from rest_framework.views import APIView
@@ -8,8 +8,9 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from accounts.permissions import IsAdmin, IsActiveStudent, IsActiveLecturer
-from fees.models import FeePayment
+from fees.utils import has_paid_fee
 from notifications.utils import notify
+from reports.utils import phd_progression_cleared
 from .models import AcademicSession, Course, CourseAllocation, Timetable, Enrollment, CourseMaterial
 from .serializers import (
     AcademicSessionSerializer, CourseSerializer, CourseAllocationSerializer,
@@ -75,13 +76,49 @@ class EnrollView(APIView):
     def post(self, request):
         allocation_id = request.data.get("allocation")
         try:
-            allocation = CourseAllocation.objects.get(pk=allocation_id)
-        except CourseAllocation.DoesNotExist:
+            allocation = CourseAllocation.objects.select_related(
+                "course__programme", "session"
+            ).get(pk=allocation_id)
+        except (CourseAllocation.DoesNotExist, ValueError, TypeError):
             return Response({"detail": "Course allocation not found."}, status=404)
 
         profile = request.user.student_profile
+        session = allocation.session
+        course = allocation.course
+
+        if not session.is_current:
+            return Response({"detail": "You can only enroll in courses for the current session."}, status=400)
+        if not course.is_active:
+            return Response({"detail": "This course is not currently offered."}, status=400)
+        if course.programme.programme_type != profile.programme:
+            return Response({"detail": f"{course.code} is not part of your programme."}, status=400)
+        if not has_paid_fee(profile, session):
+            return Response(
+                {"detail": f"Pay your {session.name} department fee before registering courses."},
+                status=403,
+            )
+        if not phd_progression_cleared(profile, session):
+            return Response(
+                {"detail": "Your Annual Progress Report for the previous session must be approved "
+                           "before you can register courses."},
+                status=403,
+            )
         if Enrollment.objects.filter(student=profile, allocation=allocation).exists():
             return Response({"detail": "Already enrolled."}, status=400)
+
+        registered_units = Enrollment.objects.filter(
+            student=profile,
+            allocation__session=session,
+            allocation__semester=allocation.semester,
+            status__in=[Enrollment.Status.PENDING, Enrollment.Status.APPROVED],
+        ).aggregate(total=Sum("allocation__course__credit_units"))["total"] or 0
+        limit = settings.MAX_CREDIT_UNITS_PER_SEMESTER
+        if registered_units + course.credit_units > limit:
+            return Response(
+                {"detail": f"Credit limit exceeded: {registered_units} units already registered this "
+                           f"semester, adding {course.credit_units} would exceed the {limit}-unit maximum."},
+                status=400,
+            )
 
         enrollment = Enrollment.objects.create(
             student=profile, allocation=allocation, status=Enrollment.Status.PENDING
@@ -138,10 +175,37 @@ class MaterialUploadView(APIView):
 
         material = CourseMaterial.objects.create(
             allocation=allocation,
-            title=request.data.get("title", upload.name),
+            title=request.data.get("title") or upload.name,
+            description=request.data.get("description", ""),
             file=upload,
         )
         return Response(CourseMaterialSerializer(material).data, status=status.HTTP_201_CREATED)
+
+
+def _material_access_error(user, allocation):
+    """Return a 403 Response if `user` may not see this allocation's materials, else None."""
+    if user.is_student:
+        profile = getattr(user, "student_profile", None)
+        if profile is None or not profile.is_active:
+            return Response({"detail": "Your student profile is not active."}, status=403)
+        if not Enrollment.objects.filter(
+            student=profile, allocation=allocation, status=Enrollment.Status.APPROVED
+        ).exists():
+            return Response({"detail": "Not enrolled."}, status=403)
+        if not has_paid_fee(profile, allocation.session):
+            session_name = allocation.session.name
+            return Response(
+                {"detail": f"You are not registered for the {session_name} session. "
+                           "Complete your session registration (fee payment) to access materials."},
+                status=403,
+            )
+    elif user.is_lecturer:
+        lecturer = getattr(user, "lecturer_profile", None)
+        if lecturer is None or not lecturer.is_active or allocation.lecturer_id != lecturer.id:
+            return Response({"detail": "You are not the lecturer for this course."}, status=403)
+    elif not user.is_admin_user:
+        return Response({"detail": "Forbidden."}, status=403)
+    return None
 
 
 class MaterialListView(APIView):
@@ -151,30 +215,30 @@ class MaterialListView(APIView):
         except CourseAllocation.DoesNotExist:
             return Response({"detail": "Allocation not found."}, status=404)
 
-        if request.user.is_student:
-            profile = getattr(request.user, "student_profile", None)
-            if profile is None or not profile.is_active:
-                return Response({"detail": "Your student profile is not active."}, status=403)
-            if not Enrollment.objects.filter(
-                student=profile, allocation=allocation, status="APPROVED"
-            ).exists():
-                return Response({"detail": "Not enrolled."}, status=403)
-            session_name = allocation.session.name
-            if not FeePayment.objects.filter(
-                student=profile, academic_year=session_name, status="APPROVED"
-            ).exists():
-                return Response(
-                    {"detail": f"You are not registered for the {session_name} session. "
-                               "Complete your session registration (fee payment) to access materials."},
-                    status=403,
-                )
-        elif request.user.is_lecturer:
-            lecturer = getattr(request.user, "lecturer_profile", None)
-            if lecturer is None or not lecturer.is_active or allocation.lecturer_id != lecturer.id:
-                return Response({"detail": "You are not the lecturer for this course."}, status=403)
-
+        denied = _material_access_error(request.user, allocation)
+        if denied:
+            return denied
         materials = CourseMaterial.objects.filter(allocation=allocation)
         return Response(CourseMaterialSerializer(materials, many=True).data)
+
+
+class MaterialDownloadView(APIView):
+    """GET /api/courses/materials/file/<pk>/  — streams a material file after access checks."""
+
+    def get(self, request, pk):
+        try:
+            material = CourseMaterial.objects.select_related("allocation__session").get(pk=pk)
+        except CourseMaterial.DoesNotExist:
+            return Response({"detail": "Material not found."}, status=404)
+
+        denied = _material_access_error(request.user, material.allocation)
+        if denied:
+            return denied
+        try:
+            fh = material.file.open("rb")
+        except FileNotFoundError:
+            return Response({"detail": "File is missing on the server."}, status=404)
+        return FileResponse(fh, as_attachment=True, filename=os.path.basename(material.file.name))
 
 
 # ── Admin views ──────────────────────────────────────────────────────────────

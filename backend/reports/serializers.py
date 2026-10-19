@@ -10,7 +10,7 @@ class APRSerializer(serializers.ModelSerializer):
     class Meta:
         model = AnnualProgressReport
         fields = [
-            "id", "student", "student_name", "session", "session_name",
+            "id", "student", "student_name", "supervisor_name", "session", "session_name",
             "year_of_study", "research_progress", "training_activities",
             "publications", "issues_concerns", "next_year_plan",
             "status", "submitted_at",

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Transcript - {{ student.matric_number }}</title>
+<style>
+  @page { size: A4; margin: 18mm 15mm; }
+  body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: 10pt; color: #111; }
+  .header { text-align: center; margin-bottom: 14px; }
+  .header h1 { font-size: 14pt; margin: 0; }
+  .header h2 { font-size: 11pt; margin: 2px 0; font-weight: normal; }
+  .header h3 { font-size: 12pt; margin: 8px 0 0; letter-spacing: 1px; }
+  table { width: 100%; border-collapse: collapse; }
+  .info td { padding: 2px 4px; }
+  .info td.label { font-weight: bold; width: 22%; }
+  .sem { margin-top: 14px; page-break-inside: avoid; }
+  .sem h4 { margin: 0 0 4px; font-size: 10.5pt; }
+  .results th, .results td { border: 1px solid #555; padding: 3px 5px; }
+  .results th { background: #eee; text-align: left; }
+  .num { text-align: center; }
+  .gpa { text-align: right; font-weight: bold; padding-top: 3px; }
+  .summary { margin-top: 18px; border: 1px solid #555; padding: 8px; }
+  .footer { margin-top: 24px; font-size: 8pt; color: #555; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>Aliko Dangote University of Science and Technology, Wudil</h1>
+    <h2>Faculty of Computing and Mathematical Science</h2>
+    <h2>Department of Computer Science</h2>
+    <h3>STUDENT ACADEMIC TRANSCRIPT</h3>
+  </div>
+
+  <table class="info">
+    <tr><td class="label">Name</td><td>{{ student.user.get_full_name|upper }}</td>
+        <td class="label">Matric No.</td><td>{{ student.matric_number }}</td></tr>
+    <tr><td class="label">Programme</td><td>{{ student.get_programme_display }}</td>
+        <td class="label">Admission Year</td><td>{{ student.admission_year }}</td></tr>
+  </table>
+
+  {% for sem in semesters %}
+  <div class="sem">
+    <h4>{{ sem.session }} &mdash; {{ sem.semester }}</h4>
+    <table class="results">
+      <tr><th>Code</th><th>Course Title</th><th class="num">Units</th>
+          <th class="num">Score</th><th class="num">Grade</th><th class="num">Points</th></tr>
+      {% for r in sem.results %}
+      <tr>
+        <td>{{ r.enrollment.allocation.course.code }}</td>
+        <td>{{ r.enrollment.allocation.course.title }}</td>
+        <td class="num">{{ r.enrollment.allocation.course.credit_units }}</td>
+        <td class="num">{{ r.score }}</td>
+        <td class="num">{{ r.grade }}</td>
+        <td class="num">{{ r.grade_point }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% if sem.gpa %}
+    <div class="gpa">Units: {{ sem.gpa.total_credit_units }} &nbsp; | &nbsp; GPA: {{ sem.gpa.gpa }}</div>
+    {% endif %}
+  </div>
+  {% empty %}
+  <p><em>No approved results yet.</em></p>
+  {% endfor %}
+
+  <div class="summary">
+    {% if cgpa %}
+      <strong>CGPA:</strong> {{ cgpa.cgpa }} &nbsp; | &nbsp;
+      <strong>Total Units Earned:</strong> {{ cgpa.total_credit_units_earned }} &nbsp; | &nbsp;
+      <strong>Classification:</strong> {{ cgpa.classification }}
+    {% else %}
+      <strong>CGPA:</strong> N/A
+    {% endif %}
+  </div>
+
+  <div class="footer">
+    Generated {{ generated_at|date:"d M Y, H:i" }}. Only results approved by the PG Coordinator are shown.
+    This is not an official transcript unless signed and stamped by the Department.
+  </div>
+</body>
+</html>

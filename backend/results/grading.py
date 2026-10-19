@@ -1,4 +1,4 @@
-﻿"""
+"""
 GradingEngine: Pure OOP class implementing the NUC/KUST 5-point grading scale.
 No database access - accepts plain numeric inputs, returns computed values.
 """
@@ -10,12 +10,12 @@ class GradingEngine:
     Implements NUC (National Universities Commission) 5-point grading scale
     as mandated for Nigerian universities including KUST.
 
-    Grade Scale:
-        A  (70-100) = 5 grade points
-        B  (60-69)  = 4 grade points
-        C  (50-59)  = 3 grade points
-        D  (45-49)  = 2 grade points
-        F  (0-44)   = 0 grade points
+    Grade Scale (lower bound inclusive, so fractional scores like 69.5 stay in B):
+        A  (70-100)    = 5 grade points
+        B  (60-<70)    = 4 grade points
+        C  (50-<60)    = 3 grade points
+        D  (45-<50)    = 2 grade points
+        F  (0-<45)     = 0 grade points
 
     CGPA Classification:
         4.50 - 5.00 = Distinction
@@ -24,12 +24,13 @@ class GradingEngine:
         < 2.50      = Fail
     """
 
+    # (grade, minimum score, grade point) — checked top-down
     GRADE_SCALE = [
-        ('A', 70, 100, 5),
-        ('B', 60, 69,  4),
-        ('C', 50, 59,  3),
-        ('D', 45, 49,  2),
-        ('F',  0, 44,  0),
+        ('A', 70, 5),
+        ('B', 60, 4),
+        ('C', 50, 3),
+        ('D', 45, 2),
+        ('F',  0, 0),
     ]
 
     CLASSIFICATION_SCALE = [
@@ -44,16 +45,16 @@ class GradingEngine:
     @classmethod
     def get_grade(cls, score: float) -> str:
         """Return the letter grade for a given numeric score."""
-        for grade, low, high, _ in cls.GRADE_SCALE:
-            if low <= score <= high:
+        for grade, low, _ in cls.GRADE_SCALE:
+            if score >= low:
                 return grade
         return 'F'
 
     @classmethod
     def get_grade_point(cls, score: float) -> int:
         """Return the grade point (0-5) for a given numeric score."""
-        for _, low, high, gp in cls.GRADE_SCALE:
-            if low <= score <= high:
+        for _, low, gp in cls.GRADE_SCALE:
+            if score >= low:
                 return gp
         return 0
 

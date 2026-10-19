@@ -1,3 +1,5 @@
+import os
+from django.urls import reverse
 from rest_framework import serializers
 from .models import AcademicSession, Programme, Course, CourseAllocation, Timetable, Enrollment, CourseMaterial
 
@@ -5,7 +7,7 @@ from .models import AcademicSession, Programme, Course, CourseAllocation, Timeta
 class AcademicSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = AcademicSession
-        fields = ["id", "name", "is_current", "start_date", "end_date"]
+        fields = ["id", "name", "is_current", "start_date", "end_date", "department_fee"]
 
 
 class ProgrammeSerializer(serializers.ModelSerializer):
@@ -77,7 +79,18 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
 
 class CourseMaterialSerializer(serializers.ModelSerializer):
+    # Files are not publicly served; expose only the filename and the
+    # authenticated download endpoint.
+    file = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
+
     class Meta:
         model = CourseMaterial
-        fields = ["id", "allocation", "title", "file", "uploaded_at"]
+        fields = ["id", "allocation", "title", "description", "file", "download_url", "uploaded_at"]
         read_only_fields = ["id", "uploaded_at"]
+
+    def get_file(self, obj):
+        return os.path.basename(obj.file.name)
+
+    def get_download_url(self, obj):
+        return reverse("courses:material_download", args=[obj.pk])

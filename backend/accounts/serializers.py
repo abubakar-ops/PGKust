@@ -14,14 +14,28 @@ class PGMSTokenObtainPairSerializer(TokenObtainPairSerializer):
         user = self.user
         if user.role == CustomUser.Role.STUDENT:
             profile = getattr(user, 'student_profile', None)
-            if profile and profile.status != StudentProfile.Status.ACTIVE:
+            if profile and profile.status == StudentProfile.Status.PENDING:
                 raise AuthenticationFailed(
                     'Your student registration is pending approval.', code='account_pending')
+            if profile and profile.status == StudentProfile.Status.SUSPENDED:
+                raise AuthenticationFailed(
+                    'Your student account is suspended. Contact the PG Coordinator.',
+                    code='account_suspended')
+            if profile and profile.status != StudentProfile.Status.ACTIVE:
+                raise AuthenticationFailed(
+                    'Your student account is no longer active.', code='account_inactive')
         elif user.role == CustomUser.Role.LECTURER:
             profile = getattr(user, 'lecturer_profile', None)
-            if profile and profile.status != 'ACTIVE':
+            if profile and profile.status == LecturerProfile.Status.PENDING:
                 raise AuthenticationFailed(
                     'Your lecturer account is pending approval.', code='account_pending')
+            if profile and profile.status == LecturerProfile.Status.REJECTED:
+                raise AuthenticationFailed(
+                    'Your lecturer registration was not approved. Contact the Head of Department.',
+                    code='account_rejected')
+            if profile and profile.status != LecturerProfile.Status.ACTIVE:
+                raise AuthenticationFailed(
+                    'Your lecturer account is not active.', code='account_inactive')
         return data
 
 
@@ -94,28 +108,46 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     phone_number = serializers.CharField(source='user.phone_number', read_only=True)
     profile_picture = serializers.ImageField(source='user.profile_picture', read_only=True)
+    supervisor_name = serializers.SerializerMethodField()
 
     class Meta:
         model = StudentProfile
         fields = [
             'id', 'email', 'first_name', 'last_name', 'full_name', 'phone_number',
             'matric_number', 'programme', 'admission_year', 'status', 'profile_picture',
+            'supervisor', 'supervisor_name',
         ]
-        read_only_fields = ['id', 'email', 'matric_number', 'status']
+        read_only_fields = ['id', 'email', 'matric_number', 'status', 'supervisor']
 
     def get_full_name(self, obj):
         return obj.user.get_full_name()
 
+    def get_supervisor_name(self, obj):
+        return obj.supervisor.user.get_full_name() if obj.supervisor else None
+
 
 class AdminUpdateStudentSerializer(serializers.ModelSerializer):
-    """Admin-only: edit a student's name, contact, and profile details (not email/status)."""
+    """Admin-only: edit a student's name, contact, profile details and supervisor (not email/status)."""
     first_name = serializers.CharField(source='user.first_name', max_length=150, required=False)
     last_name = serializers.CharField(source='user.last_name', max_length=150, required=False)
     phone_number = serializers.CharField(source='user.phone_number', max_length=20, required=False, allow_blank=True)
 
     class Meta:
         model = StudentProfile
-        fields = ['first_name', 'last_name', 'phone_number', 'matric_number', 'programme', 'admission_year']
+        fields = ['first_name', 'last_name', 'phone_number', 'matric_number', 'programme',
+                  'admission_year', 'supervisor']
+
+    def validate_supervisor(self, value):
+        if value is not None and not (value.is_active and value.is_supervisor):
+            raise serializers.ValidationError('Supervisor must be an active lecturer who can supervise.')
+        return value
+
+    def validate(self, data):
+        programme = data.get('programme', self.instance.programme)
+        supervisor = data.get('supervisor', self.instance.supervisor)
+        if supervisor and programme != StudentProfile.Programme.PHD:
+            raise serializers.ValidationError({'supervisor': 'Only PhD students have a supervisor.'})
+        return data
 
     def validate_matric_number(self, value):
         qs = StudentProfile.objects.filter(matric_number__iexact=value).exclude(pk=self.instance.pk)

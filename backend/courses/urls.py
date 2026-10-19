@@ -12,6 +12,7 @@ urlpatterns = [
     path("allocations/",                     views.LecturerAllocationListView.as_view(),  name="allocation_list"),
     path("materials/<int:allocation_pk>/",   views.MaterialListView.as_view(),             name="material_list"),
     path("materials/<int:allocation_pk>/upload/", views.MaterialUploadView.as_view(),      name="material_upload"),
+    path("materials/file/<int:pk>/",         views.MaterialDownloadView.as_view(),         name="material_download"),
     # Admin
     path("admin/allocate/",                       views.AdminAllocateCourseView.as_view(),       name="admin_allocate"),
     path("admin/timetable/",                      views.AdminTimetableCreateView.as_view(),       name="admin_timetable"),

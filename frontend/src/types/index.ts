@@ -3,6 +3,7 @@
 export type UserRole = "STUDENT" | "LECTURER" | "ADMIN";
 export type ProgrammeType = "MSC" | "PHD";
 export type ProfileStatus = "PENDING" | "ACTIVE" | "SUSPENDED" | "GRADUATED";
+export type LecturerStatus = "PENDING" | "ACTIVE" | "REJECTED";
 export type Semester = "FIRST" | "SECOND";
 export type PaymentMethod = "ONLINE" | "MANUAL";
 export type PaymentStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -28,6 +29,8 @@ export interface StudentProfile {
   admission_year: number;
   status: ProfileStatus;
   profile_picture: string | null;
+  supervisor: number | null;
+  supervisor_name: string | null;
 }
 
 export interface LecturerProfile {
@@ -39,7 +42,7 @@ export interface LecturerProfile {
   staff_id: string;
   specialization: string;
   is_supervisor: boolean;
-  status: ProfileStatus;
+  status: LecturerStatus;
 }
 
 export interface AdminProfile {
@@ -118,7 +121,10 @@ export interface CourseMaterial {
   id: number;
   allocation: number;
   title: string;
+  description: string;
+  /** filename only; download via downloadMaterial() */
   file: string;
+  download_url: string;
   uploaded_at: string;
 }
 

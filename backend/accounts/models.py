@@ -115,12 +115,14 @@ class LecturerProfile(models.Model):
     class Status(models.TextChoices):
         PENDING = 'PENDING', _('Pending Approval')
         ACTIVE = 'ACTIVE', _('Active')
+        REJECTED = 'REJECTED', _('Rejected')
 
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='lecturer_profile')
     staff_id = models.CharField(max_length=20, unique=True)
     specialization = models.CharField(max_length=100, blank=True)
     is_supervisor = models.BooleanField(default=False, help_text='Can supervise PhD students?')
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    registration_note = models.TextField(blank=True, help_text='Admin notes or rejection reason')
 
     class Meta:
         verbose_name = _('Lecturer Profile')

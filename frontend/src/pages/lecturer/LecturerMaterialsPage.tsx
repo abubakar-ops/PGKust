@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getMyAllocations, getMaterials, uploadMaterial } from "../../api/courses";
+import { getMyAllocations, getMaterials, uploadMaterial, downloadMaterial } from "../../api/courses";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import type { CourseAllocation, CourseMaterial } from "../../types";
 
@@ -160,14 +160,13 @@ export default function LecturerMaterialsPage() {
                     })}
                   </div>
                 </div>
-                <a
-                  href={m.file}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
                   className="btn btn-sm btn-outline-primary"
+                  onClick={() => { downloadMaterial(m).catch(() => alert("Download failed.")); }}
                 >
                   Download
-                </a>
+                </button>
               </li>
             ))}
           </ul>

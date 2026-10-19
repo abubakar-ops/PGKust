@@ -23,5 +23,8 @@ urlpatterns = [
 ]
 
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # Only profile pictures are public. Course materials and fee receipts are
+    # served through authenticated API views and must never be exposed here
+    # (nor by the production web server).
+    urlpatterns += static(settings.MEDIA_URL + 'profiles/', document_root=settings.MEDIA_ROOT / 'profiles')
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

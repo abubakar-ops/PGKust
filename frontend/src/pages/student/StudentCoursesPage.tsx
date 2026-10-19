@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { isAxiosError } from "axios";
-import { getMyEnrollments, getMaterials } from "../../api/courses";
+import { getMyEnrollments, getMaterials, downloadMaterial } from "../../api/courses";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import type { Enrollment, CourseMaterial } from "../../types";
 
@@ -67,14 +67,13 @@ function CourseMaterialsRow({ allocationId }: { allocationId: number }) {
               })}
             </span>
           </div>
-          <a
-            href={m.file}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
             className="btn btn-sm btn-outline-primary"
+            onClick={() => { downloadMaterial(m).catch(() => alert("Download failed.")); }}
           >
             Download
-          </a>
+          </button>
         </li>
       ))}
     </ul>
