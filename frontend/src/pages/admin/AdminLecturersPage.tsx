@@ -85,8 +85,8 @@ export default function AdminLecturersPage() {
 
   return (
     <div className="container py-4">
-      <h4 className="fw-bold mb-1">Pending Lecturers</h4>
-      <p className="text-muted">Review, edit, and approve lecturer registrations</p>
+      <h4 className="fw-bold mb-1 text-white">Pending Lecturers</h4>
+      <p className="text-white">Review, edit, and approve lecturer registrations</p>
       <Alert message={error} />
 
       {lecturers.length === 0 ? (

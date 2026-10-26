@@ -15,6 +15,4 @@ export const approveBatch = (pk: number, action: "approve" | "reject", comment?:
 export const downloadScoreSheetTemplate = (allocationPk: number) =>
   api.get<Blob>(`/results/template/${allocationPk}/`, { responseType: "blob" });
 export const uploadResultsExcel = (allocationPk: number, formData: FormData) =>
-  api.post<ExcelUploadResponse>(`/results/upload-excel/${allocationPk}/`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  api.post<ExcelUploadResponse>(`/results/upload-excel/${allocationPk}/`, formData);

@@ -61,7 +61,7 @@ export default function StudentRegisterPage() {
           <div className="card shadow-sm border-0">
             <div className="card-body p-4">
               <h4 className="fw-bold mb-1">Student Registration</h4>
-              <p className="text-muted small mb-3">KUST CS Postgraduate Programme</p>
+              <p className="text-muted small mb-3">ADUST CS Postgraduate Programme</p>
               <Alert type="danger" message={error} />
               <Alert type="success" message={success} />
               <form onSubmit={(e) => void handleSubmit(e)}>

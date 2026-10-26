@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { getMyAllocations } from "../../api/courses";
+import api from "../../api/client";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import type { CourseAllocation } from "../../types";
 
@@ -21,19 +22,28 @@ export default function LecturerAllocationsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const handleDownloadStudents = async (allocationId: number) => {
+    try {
+      const { data } = await api.get(`/courses/allocations/${allocationId}/students/export/`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([data], { type: "text/csv;charset=utf-8;" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `students-${allocationId}.csv`;
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setError("Could not download the student list for this course.");
+    }
+  };
+
   if (loading) return <LoadingSpinner />;
 
   return (
     <div className="container py-4" style={{ maxWidth: 900 }}>
-      <nav aria-label="breadcrumb" className="mb-3">
-        <ol className="breadcrumb">
-          <li className="breadcrumb-item"><Link to="/lecturer/dashboard">Dashboard</Link></li>
-          <li className="breadcrumb-item active">My Courses</li>
-        </ol>
-      </nav>
-
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <h4 className="fw-bold mb-0">My Courses This Session</h4>
+        <h4 className="fw-bold mb-0 text-white">My Courses</h4>
         <span className="badge bg-primary fs-6">{allocations.length}</span>
       </div>
 
@@ -62,7 +72,7 @@ export default function LecturerAllocationsPage() {
                     {a.session_name} · {SEMESTER_LABEL[a.semester] ?? a.semester} ·{" "}
                     {a.enrolled_count} enrolled student{a.enrolled_count === 1 ? "" : "s"}
                   </div>
-                  <div className="mt-auto d-flex gap-2">
+                  <div className="mt-auto d-flex gap-2 flex-wrap">
                     <Link
                       to={`/lecturer/materials/${a.id}`}
                       className="btn btn-sm btn-outline-secondary flex-fill"
@@ -75,6 +85,13 @@ export default function LecturerAllocationsPage() {
                     >
                       📊 Upload Results
                     </Link>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-success flex-fill"
+                      onClick={() => void handleDownloadStudents(a.id)}
+                    >
+                      ⬇ Download Students
+                    </button>
                   </div>
                 </div>
               </div>

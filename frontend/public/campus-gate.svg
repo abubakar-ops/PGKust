@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" role="img" aria-label="University campus gate">
+  <defs>
+    <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#dfe8dc"/>
+      <stop offset="100%" stop-color="#a9bda1"/>
+    </linearGradient>
+    <linearGradient id="wall" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0%" stop-color="#b8d0b1"/>
+      <stop offset="50%" stop-color="#a9c3a0"/>
+      <stop offset="100%" stop-color="#8aa389"/>
+    </linearGradient>
+    <linearGradient id="gate" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0%" stop-color="#d5d9ce"/>
+      <stop offset="50%" stop-color="#f4f3ee"/>
+      <stop offset="100%" stop-color="#d7d4cd"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="700" fill="url(#sky)"/>
+
+  <g opacity="0.8">
+    <rect x="0" y="120" width="1200" height="20" fill="#7b8e74"/>
+    <path d="M0 140 L1200 140" stroke="#708268" stroke-width="2"/>
+  </g>
+
+  <g>
+    <rect x="0" y="150" width="1200" height="480" fill="url(#wall)"/>
+    <rect x="0" y="550" width="1200" height="150" fill="#7d8f77"/>
+  </g>
+
+  <g opacity="0.25">
+    <circle cx="120" cy="150" r="80" fill="#567258"/>
+    <circle cx="260" cy="120" r="100" fill="#567258"/>
+    <circle cx="390" cy="150" r="90" fill="#567258"/>
+    <circle cx="840" cy="120" r="110" fill="#567258"/>
+    <circle cx="1030" cy="150" r="90" fill="#567258"/>
+    <circle cx="1160" cy="120" r="80" fill="#567258"/>
+  </g>
+
+  <g>
+    <rect x="130" y="200" width="150" height="360" fill="#1c4c3d" opacity="0.85"/>
+    <rect x="920" y="200" width="150" height="360" fill="#1c4c3d" opacity="0.85"/>
+    <rect x="260" y="170" width="680" height="390" rx="22" fill="#9bb392" stroke="#2d5b43" stroke-width="8"/>
+  </g>
+
+  <g>
+    <path d="M310 170 Q600 60 890 170" fill="none" stroke="#2a5e40" stroke-width="20"/>
+    <path d="M200 200 Q600 80 1000 200" fill="none" stroke="#5f8d72" stroke-width="10" opacity="0.8"/>
+    <path d="M210 200 L210 550" stroke="#d9e4d3" stroke-width="14"/>
+    <path d="M990 200 L990 550" stroke="#d9e4d3" stroke-width="14"/>
+  </g>
+
+  <g>
+    <path d="M220 220 Q600 95 980 220" fill="none" stroke="#f3efe9" stroke-width="6" opacity="0.8"/>
+    <rect x="300" y="180" width="600" height="380" rx="18" fill="#d7d7d0" opacity="0.22"/>
+  </g>
+
+  <g>
+    <rect x="350" y="240" width="120" height="280" rx="8" fill="#d9d6cf" stroke="#5f7d65" stroke-width="6"/>
+    <rect x="730" y="240" width="120" height="280" rx="8" fill="#d9d6cf" stroke="#5f7d65" stroke-width="6"/>
+    <rect x="470" y="220" width="260" height="310" rx="18" fill="url(#gate)" stroke="#6d7d68" stroke-width="8"/>
+  </g>
+
+  <g>
+    <rect x="490" y="250" width="12" height="250" fill="#5f7264"/>
+    <rect x="700" y="250" width="12" height="250" fill="#5f7264"/>
+    <path d="M510 250 L510 500" stroke="#849887" stroke-width="7"/>
+    <path d="M690 250 L690 500" stroke="#849887" stroke-width="7"/>
+    <path d="M490 255 L700 255" stroke="#849887" stroke-width="7"/>
+    <path d="M490 500 L700 500" stroke="#849887" stroke-width="7"/>
+    <path d="M600 255 L600 500" stroke="#8aa189" stroke-width="6"/>
+  </g>
+
+  <g>
+    <rect x="520" y="155" width="160" height="85" rx="12" fill="#1a5e4a" stroke="#d7ecdf" stroke-width="6"/>
+    <text x="600" y="205" text-anchor="middle" font-size="26" font-weight="700" fill="#f4f9f5" font-family="Georgia, serif">ADUST</text>
+    <text x="600" y="228" text-anchor="middle" font-size="12" letter-spacing="3" fill="#dcefe2" font-family="Arial, sans-serif">SCIENCE &amp; TECHNOLOGY</text>
+  </g>
+
+  <g>
+    <path d="M260 520 Q600 610 940 520" fill="none" stroke="#2f4d3d" stroke-width="18"/>
+    <rect x="0" y="560" width="1200" height="35" fill="#5d6f60"/>
+  </g>
+
+  <g opacity="0.8">
+    <circle cx="145" cy="520" r="35" fill="#587c65"/>
+    <circle cx="1055" cy="520" r="35" fill="#587c65"/>
+    <path d="M130 530 C170 500, 190 500, 220 530" fill="none" stroke="#355a4d" stroke-width="9"/>
+    <path d="M980 530 C1020 500, 1040 500, 1075 530" fill="none" stroke="#355a4d" stroke-width="9"/>
+  </g>
+
+  <g opacity="0.28">
+    <path d="M125 610 Q140 560 160 610" stroke="#4d684f" stroke-width="12" fill="none"/>
+    <path d="M1050 610 Q1065 560 1085 610" stroke="#4d684f" stroke-width="12" fill="none"/>
+  </g>
+</svg>

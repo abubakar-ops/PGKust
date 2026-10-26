@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { isAxiosError } from "axios";
-import { getMyEnrollments, getMaterials, downloadMaterial } from "../../api/courses";
+import { dropEnrollment, getMyEnrollments, getMaterials } from "../../api/courses";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import type { Enrollment, CourseMaterial } from "../../types";
 
@@ -61,19 +61,31 @@ function CourseMaterialsRow({ allocationId }: { allocationId: number }) {
           <div>
             <span className="me-2">{fileIcon(m.file)}</span>
             <span>{m.title}</span>
+            {m.description && (
+              <div className="text-muted small ms-4" style={{ whiteSpace: "pre-wrap" }}>
+                {m.description}
+              </div>
+            )}
             <span className="text-muted small ms-2">
               {new Date(m.uploaded_at).toLocaleDateString("en-GB", {
                 day: "numeric", month: "short", year: "numeric",
               })}
             </span>
           </div>
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-primary"
-            onClick={() => { downloadMaterial(m).catch(() => alert("Download failed.")); }}
-          >
-            Download
-          </button>
+          {m.file_available ? (
+            <a
+              href={m.file}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-sm btn-outline-primary"
+            >
+              Download
+            </a>
+          ) : (
+            <span className="text-danger small" title="The file is missing from server storage.">
+              File unavailable
+            </span>
+          )}
         </li>
       ))}
     </ul>
@@ -83,11 +95,18 @@ function CourseMaterialsRow({ allocationId }: { allocationId: number }) {
 export default function StudentCoursesPage() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [droppingId, setDroppingId] = useState<number | null>(null);
+  const [enrollmentActionMessage, setEnrollmentActionMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     getMyEnrollments()
       .then(({ data }) => setEnrollments(data))
+      .catch(() => setError("Failed to load your courses. Please try again."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -100,24 +119,56 @@ export default function StudentCoursesPage() {
     setExpandedId((prev) => (prev === allocationId ? null : allocationId));
   }
 
+  async function handleDrop(enrollment: Enrollment) {
+    if (!window.confirm(`Drop ${enrollment.course_code} — ${enrollment.course_title}?`)) return;
+    setDroppingId(enrollment.id);
+    setEnrollmentActionMessage("");
+    try {
+      await dropEnrollment(enrollment.id);
+      setEnrollments((prev) => prev.filter((item) => item.id !== enrollment.id));
+      setEnrollmentActionMessage({
+        type: "success",
+        text: `${enrollment.course_code} enrollment dropped.`,
+      });
+      if (expandedId === enrollment.allocation) setExpandedId(null);
+    } catch (err: unknown) {
+      const detail = isAxiosError<{ detail?: string }>(err)
+        ? err.response?.data?.detail
+        : undefined;
+      setEnrollmentActionMessage({
+        type: "error",
+        text: detail ?? "Could not drop this enrollment. Please try again.",
+      });
+    } finally {
+      setDroppingId(null);
+    }
+  }
+
   return (
     <div className="container py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h4 className="fw-bold mb-0">My Courses</h4>
-          <p className="text-muted small mb-0">
+          <h4 className="fw-bold mb-0 text-white">My Courses</h4>
+          <p className="text-white small mb-0">
             {approved.length} approved &middot; {others.length} pending / rejected
           </p>
         </div>
-        <Link to="/student/dashboard" className="btn btn-outline-secondary btn-sm">← Dashboard</Link>
+        <Link to="/student/dashboard" className="btn btn-outline-secondary btn-sm text-white">← Dashboard</Link>
       </div>
 
-      {enrollments.length === 0 ? (
+      {error ? (
+        <div className="alert alert-danger">{error}</div>
+      ) : enrollments.length === 0 ? (
         <div className="alert alert-info">
           You are not enrolled in any courses yet. Contact the admin to get enrolled.
         </div>
       ) : (
         <>
+          {enrollmentActionMessage && (
+            <div className={`alert alert-${enrollmentActionMessage.type === "success" ? "success" : "danger"}`}>
+              {enrollmentActionMessage.text}
+            </div>
+          )}
           {approved.length > 0 && (
             <div className="card border-0 shadow-sm mb-4">
               <div className="card-header bg-white fw-semibold">
@@ -146,6 +197,14 @@ export default function StudentCoursesPage() {
                             onClick={() => toggleMaterials(e.allocation)}
                           >
                             {expandedId === e.allocation ? "Hide Materials ▲" : "Materials ▼"}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            disabled={droppingId === e.id}
+                            onClick={() => { void handleDrop(e); }}
+                          >
+                            {droppingId === e.id ? "Dropping…" : "Drop"}
                           </button>
                         </div>
                       </div>

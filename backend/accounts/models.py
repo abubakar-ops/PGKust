@@ -87,7 +87,7 @@ class StudentProfile(models.Model):
     admission_year = models.PositiveIntegerField()
     supervisor = models.ForeignKey(
         'LecturerProfile', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='supervised_students', help_text='Required for PhD students')
+        related_name='supervised_students', help_text='Assigned academic supervisor')
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     registration_note = models.TextField(blank=True, help_text='Admin notes or rejection reason')
 
@@ -115,14 +115,13 @@ class LecturerProfile(models.Model):
     class Status(models.TextChoices):
         PENDING = 'PENDING', _('Pending Approval')
         ACTIVE = 'ACTIVE', _('Active')
-        REJECTED = 'REJECTED', _('Rejected')
 
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='lecturer_profile')
     staff_id = models.CharField(max_length=20, unique=True)
     specialization = models.CharField(max_length=100, blank=True)
-    is_supervisor = models.BooleanField(default=False, help_text='Can supervise PhD students?')
+    is_supervisor = models.BooleanField(
+        default=False, help_text='Available to supervise postgraduate students')
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
-    registration_note = models.TextField(blank=True, help_text='Admin notes or rejection reason')
 
     class Meta:
         verbose_name = _('Lecturer Profile')

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { getPendingStudents, approveStudent, updateStudent } from "../../api/auth";
+import { getAllLecturers, getPendingStudents, approveStudent, updateStudent } from "../../api/auth";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import Alert from "../../components/Alert";
-import type { StudentProfile, ProgrammeType } from "../../types";
+import type { LecturerProfile, StudentProfile, ProgrammeType } from "../../types";
 
 interface EditForm {
   first_name: string;
@@ -10,10 +10,12 @@ interface EditForm {
   matric_number: string;
   programme: ProgrammeType;
   admission_year: number;
+  supervisor: number | null;
 }
 
 export default function AdminStudentsPage() {
   const [students, setStudents] = useState<StudentProfile[]>([]);
+  const [supervisors, setSupervisors] = useState<LecturerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actingId, setActingId] = useState<number | null>(null);
@@ -25,10 +27,14 @@ export default function AdminStudentsPage() {
     setLoading(true);
     setError("");
     try {
-      const { data } = await getPendingStudents();
-      setStudents(data);
+      const [studentsResponse, lecturersResponse] = await Promise.all([
+        getPendingStudents(),
+        getAllLecturers("ACTIVE"),
+      ]);
+      setStudents(studentsResponse.data);
+      setSupervisors(lecturersResponse.data.filter((lecturer) => lecturer.is_supervisor));
     } catch {
-      setError("Could not load pending students.");
+      setError("Could not load pending students or supervisors.");
     } finally {
       setLoading(false);
     }
@@ -57,6 +63,7 @@ export default function AdminStudentsPage() {
       matric_number: s.matric_number,
       programme: s.programme,
       admission_year: s.admission_year,
+      supervisor: s.supervisor,
     });
     setError("");
   };
@@ -85,8 +92,8 @@ export default function AdminStudentsPage() {
 
   return (
     <div className="container py-4">
-      <h4 className="fw-bold mb-1">Pending Students</h4>
-      <p className="text-muted">Review, edit, and approve student registrations</p>
+      <h4 className="fw-bold mb-1 text-white">Pending Students</h4>
+      <p className="text-white">Review, edit, and approve student registrations</p>
       <Alert message={error} />
 
       {students.length === 0 ? (
@@ -103,6 +110,7 @@ export default function AdminStudentsPage() {
                   <th>Email</th>
                   <th>Matric No.</th>
                   <th>Programme</th>
+                  <th>Supervisor</th>
                   <th>Admission Year</th>
                   <th className="text-end">Actions</th>
                 </tr>
@@ -137,6 +145,29 @@ export default function AdminStudentsPage() {
                             </select>
                           </td>
                           <td>
+                            <select
+                              className="form-select form-select-sm"
+                              value={editForm.supervisor ?? ""}
+                              onChange={(e) => setEditForm({
+                                ...editForm,
+                                supervisor: e.target.value ? Number(e.target.value) : null,
+                              })}
+                            >
+                              <option value="">Unassigned</option>
+                              {editForm.supervisor !== null
+                                && !supervisors.some((lecturer) => lecturer.id === editForm.supervisor) && (
+                                  <option value={editForm.supervisor}>
+                                    {s.supervisor_name || "Current supervisor"} (currently unavailable)
+                                  </option>
+                                )}
+                              {supervisors.map((lecturer) => (
+                                <option key={lecturer.id} value={lecturer.id}>
+                                  {lecturer.full_name} ({lecturer.staff_id})
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
                             <input type="number" className="form-control form-control-sm" style={{ width: 90 }}
                               value={editForm.admission_year}
                               onChange={(e) => setEditForm({ ...editForm, admission_year: Number(e.target.value) })} />
@@ -157,6 +188,7 @@ export default function AdminStudentsPage() {
                           <td>{s.email}</td>
                           <td>{s.matric_number}</td>
                           <td>{s.programme}</td>
+                          <td>{s.supervisor_name || "—"}</td>
                           <td>{s.admission_year}</td>
                           <td className="text-end">
                             <button className="btn btn-sm btn-outline-secondary me-2" onClick={() => startEdit(s)}>

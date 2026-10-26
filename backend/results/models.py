@@ -88,7 +88,7 @@ class CumulativeGPA(models.Model):
     """Computed CGPA for a student across all approved semesters. One record per student."""
     student = models.OneToOneField(StudentProfile, on_delete=models.CASCADE, related_name='cumulative_gpa')
     cgpa = models.DecimalField(max_digits=4, decimal_places=2, default=0)
-    classification = models.CharField(max_length=15, default='N/A')
+    classification = models.CharField(max_length=30, default='N/A')
     total_credit_units_earned = models.PositiveSmallIntegerField(default=0)
     total_quality_points = models.PositiveSmallIntegerField(default=0)
     last_updated = models.DateTimeField(auto_now=True)
