@@ -1,4 +1,8 @@
-﻿from django.db import models
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
+from django.db import models
+from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 from accounts.models import StudentProfile, LecturerProfile
 
@@ -6,14 +10,17 @@ from accounts.models import StudentProfile, LecturerProfile
 class AcademicSession(models.Model):
     name = models.CharField(max_length=20, unique=True, help_text='e.g. 2024/2025')
     is_current = models.BooleanField(default=False)
+    department_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))]
+    )
     start_date = models.DateField()
     end_date = models.DateField()
-    department_fee = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0,
-        help_text='Annual department fee (NGN) students must pay for this session')
 
     class Meta:
         ordering = ['-start_date']
+        constraints = [
+            models.UniqueConstraint(Lower('name'), name='unique_academic_session_name_ci'),
+        ]
 
     def __str__(self):
         return self.name
@@ -23,10 +30,6 @@ class AcademicSession(models.Model):
             AcademicSession.objects.exclude(pk=self.pk).update(is_current=False)
         super().save(*args, **kwargs)
 
-    @classmethod
-    def current(cls):
-        return cls.objects.filter(is_current=True).first()
-
 
 class Programme(models.Model):
     class ProgrammeType(models.TextChoices):
@@ -35,7 +38,7 @@ class Programme(models.Model):
 
     name = models.CharField(max_length=100)
     programme_type = models.CharField(max_length=3, choices=ProgrammeType.choices)
-    duration_years = models.PositiveSmallIntegerField(default=2)
+    duration_years = models.PositiveSmallIntegerField(default=2, validators=[MinValueValidator(1)])
     description = models.TextField(blank=True)
 
     class Meta:
@@ -52,9 +55,9 @@ class Course(models.Model):
 
     code = models.CharField(max_length=10, unique=True)
     title = models.CharField(max_length=150)
-    credit_units = models.PositiveSmallIntegerField()
+    credit_units = models.PositiveSmallIntegerField(validators=[MinValueValidator(1)])
     semester = models.CharField(max_length=6, choices=Semester.choices)
-    programme = models.ForeignKey(Programme, on_delete=models.CASCADE, related_name='courses')
+    programme = models.ForeignKey(Programme, on_delete=models.PROTECT, related_name='courses')
     is_elective = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     description = models.TextField(blank=True)
@@ -68,8 +71,8 @@ class Course(models.Model):
 
 class CourseAllocation(models.Model):
     lecturer = models.ForeignKey(LecturerProfile, on_delete=models.CASCADE, related_name='allocations')
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='allocations')
-    session = models.ForeignKey(AcademicSession, on_delete=models.CASCADE, related_name='allocations')
+    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name='allocations')
+    session = models.ForeignKey(AcademicSession, on_delete=models.PROTECT, related_name='allocations')
     semester = models.CharField(max_length=6, choices=Course.Semester.choices)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -89,7 +92,7 @@ class Timetable(models.Model):
         THURSDAY = 'THU', _('Thursday')
         FRIDAY = 'FRI', _('Friday')
 
-    allocation = models.OneToOneField(CourseAllocation, on_delete=models.CASCADE, related_name='timetable')
+    allocation = models.OneToOneField(CourseAllocation, on_delete=models.PROTECT, related_name='timetable')
     day = models.CharField(max_length=3, choices=Day.choices)
     start_time = models.TimeField()
     end_time = models.TimeField()
@@ -124,7 +127,7 @@ class Enrollment(models.Model):
         REJECTED = 'REJECTED', _('Rejected')
 
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='enrollments')
-    allocation = models.ForeignKey(CourseAllocation, on_delete=models.CASCADE, related_name='enrollments')
+    allocation = models.ForeignKey(CourseAllocation, on_delete=models.PROTECT, related_name='enrollments')
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.PENDING)
     enrolled_at = models.DateTimeField(auto_now_add=True)
     rejection_reason = models.TextField(blank=True)
@@ -146,7 +149,10 @@ def material_upload_path(instance, filename):
 
 
 class CourseMaterial(models.Model):
-    allocation = models.ForeignKey(CourseAllocation, on_delete=models.CASCADE, related_name='materials')
+    allocation = models.ForeignKey(CourseAllocation, on_delete=models.PROTECT, related_name='materials')
+    uploader = models.ForeignKey(
+        LecturerProfile, on_delete=models.PROTECT, related_name='uploaded_materials'
+    )
     title = models.CharField(max_length=200)
     file = models.FileField(upload_to=material_upload_path)
     description = models.TextField(blank=True)

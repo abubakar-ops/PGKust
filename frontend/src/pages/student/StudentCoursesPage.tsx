@@ -1,19 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { isAxiosError } from "axios";
-import { getMyEnrollments, getMaterials, downloadMaterial } from "../../api/courses";
+import { getMyEnrollments } from "../../api/courses";
 import LoadingSpinner from "../../components/LoadingSpinner";
-import type { Enrollment, CourseMaterial } from "../../types";
-
-function fileIcon(filename: string) {
-  const ext = filename.split(".").pop()?.toLowerCase();
-  if (ext === "pdf") return "📄";
-  if (["ppt", "pptx"].includes(ext ?? "")) return "📊";
-  if (["doc", "docx"].includes(ext ?? "")) return "📝";
-  if (["xls", "xlsx"].includes(ext ?? "")) return "📈";
-  if (["zip", "rar"].includes(ext ?? "")) return "🗜️";
-  return "📎";
-}
+import type { Enrollment } from "../../types";
 
 function StatusBadge({ status }: { status: Enrollment["status"] }) {
   const map = {
@@ -24,66 +13,9 @@ function StatusBadge({ status }: { status: Enrollment["status"] }) {
   return <span className={`badge bg-${map[status]}`}>{status}</span>;
 }
 
-function CourseMaterialsRow({ allocationId }: { allocationId: number }) {
-  const [materials, setMaterials] = useState<CourseMaterial[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    getMaterials(allocationId)
-      .then(({ data }) => setMaterials(data))
-      .catch((err: unknown) => {
-        const detail = isAxiosError<{ detail?: string }>(err)
-          ? err.response?.data?.detail
-          : undefined;
-        setError(detail ?? "Failed to load materials.");
-      })
-      .finally(() => setLoading(false));
-  }, [allocationId]);
-
-  if (loading) return (
-    <div className="p-3 text-muted small">
-      <span className="spinner-border spinner-border-sm me-2" />Loading materials…
-    </div>
-  );
-  if (error) return <div className="p-3 text-danger small">{error}</div>;
-  if (materials.length === 0) return (
-    <div className="p-3 text-muted small">No materials uploaded by the lecturer yet.</div>
-  );
-
-  return (
-    <ul className="list-group list-group-flush">
-      {materials.map((m) => (
-        <li
-          key={m.id}
-          className="list-group-item d-flex justify-content-between align-items-center py-2 ps-4"
-        >
-          <div>
-            <span className="me-2">{fileIcon(m.file)}</span>
-            <span>{m.title}</span>
-            <span className="text-muted small ms-2">
-              {new Date(m.uploaded_at).toLocaleDateString("en-GB", {
-                day: "numeric", month: "short", year: "numeric",
-              })}
-            </span>
-          </div>
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-primary"
-            onClick={() => { downloadMaterial(m).catch(() => alert("Download failed.")); }}
-          >
-            Download
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export default function StudentCoursesPage() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
     getMyEnrollments()
@@ -95,10 +27,6 @@ export default function StudentCoursesPage() {
 
   const approved = enrollments.filter((e) => e.status === "APPROVED");
   const others = enrollments.filter((e) => e.status !== "APPROVED");
-
-  function toggleMaterials(allocationId: number) {
-    setExpandedId((prev) => (prev === allocationId ? null : allocationId));
-  }
 
   return (
     <div className="container py-4">
@@ -126,35 +54,27 @@ export default function StudentCoursesPage() {
               </div>
               <div className="list-group list-group-flush">
                 {approved.map((e) => (
-                  <div key={e.id}>
-                    <div className="list-group-item">
-                      <div className="d-flex justify-content-between align-items-start">
-                        <div>
-                          <span className="fw-semibold me-2">
-                            <code>{e.course_code}</code>
-                          </span>
-                          {e.course_title}
-                          <div className="text-muted small mt-1">
-                            {e.credit_units} CU &middot; Lecturer: {e.lecturer_name}
-                          </div>
+                  <div key={e.id} className="list-group-item">
+                    <div className="d-flex justify-content-between align-items-start">
+                      <div>
+                        <span className="fw-semibold me-2">
+                          <code>{e.course_code}</code>
+                        </span>
+                        {e.course_title}
+                        <div className="text-muted small mt-1">
+                          {e.credit_units} CU &middot; Lecturer: {e.lecturer_name}
                         </div>
-                        <div className="d-flex align-items-center gap-2">
-                          <StatusBadge status={e.status} />
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-secondary"
-                            onClick={() => toggleMaterials(e.allocation)}
-                          >
-                            {expandedId === e.allocation ? "Hide Materials ▲" : "Materials ▼"}
-                          </button>
-                        </div>
+                      </div>
+                      <div className="d-flex align-items-center gap-2">
+                        <StatusBadge status={e.status} />
+                        <Link
+                          to={`/student/materials/${e.allocation}`}
+                          className="btn btn-sm btn-primary text-nowrap"
+                        >
+                          📚 Materials
+                        </Link>
                       </div>
                     </div>
-                    {expandedId === e.allocation && (
-                      <div className="bg-light border-bottom">
-                        <CourseMaterialsRow allocationId={e.allocation} />
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>

@@ -22,7 +22,7 @@ class AnnualProgressReport(models.Model):
         related_name='annual_reports',
         limit_choices_to={'programme': 'PHD'},
     )
-    session = models.ForeignKey(AcademicSession, on_delete=models.CASCADE, related_name='apr_reports')
+    session = models.ForeignKey(AcademicSession, on_delete=models.PROTECT, related_name='apr_reports')
     year_of_study = models.PositiveSmallIntegerField(help_text='e.g. 1 for Year 1')
 
     # --- APR Sections ---

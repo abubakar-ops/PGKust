@@ -37,9 +37,23 @@ export default function LecturerResultsUploadPage() {
   }, [preselected]);
 
   const allocation = allocations.find((a) => a.id === allocationId) ?? null;
+  const batchApproved = allocation?.result_batch_status === "APPROVED";
 
-  function apiErrorDetail(err: unknown): string | undefined {
-    return isAxiosError<{ detail?: string }>(err) ? err.response?.data?.detail : undefined;
+  async function apiErrorDetail(err: unknown): Promise<string | undefined> {
+    if (!isAxiosError(err) || !err.response) return undefined;
+    const data = err.response.data;
+    if (data instanceof Blob) {
+      try {
+        const text = await data.text();
+        const parsed = JSON.parse(text) as { detail?: string };
+        return parsed.detail ?? text;
+      } catch {
+        return undefined;
+      }
+    }
+    if (typeof data?.detail === "string") return data.detail;
+    if (data && typeof data === "object") return JSON.stringify(data);
+    return undefined;
   }
 
   async function handleDownloadTemplate() {
@@ -62,13 +76,7 @@ export default function LecturerResultsUploadPage() {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
-      let detail = apiErrorDetail(err);
-      // blob-typed requests deliver error JSON as a Blob — decode it
-      if (!detail && isAxiosError(err) && err.response?.data instanceof Blob) {
-        try {
-          detail = (JSON.parse(await err.response.data.text()) as { detail?: string }).detail;
-        } catch { /* not JSON — keep generic message */ }
-      }
+      const detail = await apiErrorDetail(err);
       setError(detail ?? "Failed to download the score sheet template.");
     } finally {
       setDownloading(false);
@@ -90,7 +98,8 @@ export default function LecturerResultsUploadPage() {
       setFile(null);
       if (fileRef.current) fileRef.current.value = "";
     } catch (err) {
-      setError(apiErrorDetail(err) ?? "Upload failed. Make sure you used the downloaded template.");
+      const detail = await apiErrorDetail(err);
+      setError(detail ?? "Upload failed. Check that the selected allocation is correct and the server is running.");
     } finally {
       setUploading(false);
     }
@@ -132,6 +141,13 @@ export default function LecturerResultsUploadPage() {
         </div>
       </div>
 
+      {batchApproved ? (
+        <div className="alert alert-success" role="status">
+          <strong>Approved — Read Only.</strong> This result batch has been approved and published.
+          Scores remain available for viewing, but uploads and edits are locked.
+        </div>
+      ) : (
+        <>
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-white fw-semibold">2. Download Blank Score Sheet</div>
         <div className="card-body">
@@ -176,15 +192,25 @@ export default function LecturerResultsUploadPage() {
           </form>
         </div>
       </div>
+        </>
+      )}
 
       {report && (
         <div className="card border-0 shadow-sm">
           <div className="card-header bg-white fw-semibold">Upload Report</div>
           <div className="card-body">
-            <div className="alert alert-success py-2">
-              {report.uploaded} result{report.uploaded === 1 ? "" : "s"} uploaded.
-              Batch status: <strong>{report.batch_status}</strong> (results become visible to
-              students after PG Coordinator approval).
+            <div className={`alert py-2 ${report.uploaded > 0 && report.errors.length === 0 && report.students_without_scores.length === 0 ? "alert-success" : report.uploaded > 0 ? "alert-warning" : "alert-danger"}`}>
+              {report.uploaded > 0 ? (
+                <>
+                  {report.uploaded} result{report.uploaded === 1 ? "" : "s"} uploaded.
+                  Batch status: <strong>{report.batch_status}</strong> (results become visible to
+                  students after PG Coordinator approval).
+                  {(report.errors.length > 0 || report.students_without_scores.length > 0) &&
+                    " Some results still need attention; see the details below."}
+                </>
+              ) : (
+                "No results were uploaded. Resolve the issues below and upload the score sheet again."
+              )}
             </div>
             {report.errors.length > 0 && (
               <>

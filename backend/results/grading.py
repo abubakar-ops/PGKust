@@ -1,5 +1,5 @@
-"""
-GradingEngine: Pure OOP class implementing the NUC/KUST 5-point grading scale.
+﻿"""
+GradingEngine: Pure OOP class implementing the NUC/ADUST 5-point grading scale.
 No database access - accepts plain numeric inputs, returns computed values.
 """
 from decimal import Decimal, ROUND_HALF_UP
@@ -8,53 +8,58 @@ from decimal import Decimal, ROUND_HALF_UP
 class GradingEngine:
     """
     Implements NUC (National Universities Commission) 5-point grading scale
-    as mandated for Nigerian universities including KUST.
+    as mandated for Nigerian universities including ADUST.
 
-    Grade Scale (lower bound inclusive, so fractional scores like 69.5 stay in B):
-        A  (70-100)    = 5 grade points
-        B  (60-<70)    = 4 grade points
-        C  (50-<60)    = 3 grade points
-        D  (45-<50)    = 2 grade points
-        F  (0-<45)     = 0 grade points
+    Grade Scale:
+        A  (70-100) = 5 grade points
+        B  (60-69)  = 4 grade points
+        C  (50-59)  = 3 grade points
+        D  (45-49)  = 2 grade points
+        E  (40-44)  = 1 grade point
+        F  (0-39)   = 0 grade points
 
     CGPA Classification:
-        4.50 - 5.00 = Distinction
-        3.50 - 4.49 = Merit
-        2.50 - 3.49 = Pass
-        < 2.50      = Fail
+        4.50 - 5.00 = First Class
+        3.50 - 4.49 = Second Class Upper
+        2.40 - 3.49 = Second Class Lower
+        1.50 - 2.39 = Third Class
+        1.00 - 1.49 = Pass
+        < 1.00      = Fail
     """
 
-    # (grade, minimum score, grade point) — checked top-down
     GRADE_SCALE = [
-        ('A', 70, 5),
-        ('B', 60, 4),
-        ('C', 50, 3),
-        ('D', 45, 2),
-        ('F',  0, 0),
+        ('A', 70, 100, 5),
+        ('B', 60, 69,  4),
+        ('C', 50, 59,  3),
+        ('D', 45, 49,  2),
+        ('E', 40, 44,  1),
+        ('F',  0, 39,  0),
     ]
 
     CLASSIFICATION_SCALE = [
-        ('Distinction', Decimal('4.50'), Decimal('5.00')),
-        ('Merit',       Decimal('3.50'), Decimal('4.49')),
-        ('Pass',        Decimal('2.50'), Decimal('3.49')),
-        ('Fail',        Decimal('0.00'), Decimal('2.49')),
+        ('First Class',         Decimal('4.50'), Decimal('5.00')),
+        ('Second Class Upper',   Decimal('3.50'), Decimal('4.49')),
+        ('Second Class Lower',   Decimal('2.40'), Decimal('3.49')),
+        ('Third Class',          Decimal('1.50'), Decimal('2.39')),
+        ('Pass',                 Decimal('1.00'), Decimal('1.49')),
+        ('Fail',                 Decimal('0.00'), Decimal('0.99')),
     ]
 
-    MINIMUM_CGPA = Decimal('2.50')
+    MINIMUM_CGPA = Decimal('1.00')
 
     @classmethod
     def get_grade(cls, score: float) -> str:
         """Return the letter grade for a given numeric score."""
-        for grade, low, _ in cls.GRADE_SCALE:
-            if score >= low:
+        for grade, low, high, _ in cls.GRADE_SCALE:
+            if low <= score <= high:
                 return grade
         return 'F'
 
     @classmethod
     def get_grade_point(cls, score: float) -> int:
         """Return the grade point (0-5) for a given numeric score."""
-        for _, low, gp in cls.GRADE_SCALE:
-            if score >= low:
+        for _, low, high, gp in cls.GRADE_SCALE:
+            if low <= score <= high:
                 return gp
         return 0
 

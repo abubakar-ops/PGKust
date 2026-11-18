@@ -1,4 +1,5 @@
 ﻿from django.db import models
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from accounts.models import StudentProfile
 from courses.models import Enrollment, AcademicSession
@@ -15,7 +16,7 @@ class SemesterResultBatch(models.Model):
         APPROVED = 'APPROVED', _('Approved - Visible to Students')
         REJECTED = 'REJECTED', _('Rejected - Lecturers Must Re-upload')
 
-    session = models.ForeignKey(AcademicSession, on_delete=models.CASCADE, related_name='result_batches')
+    session = models.ForeignKey(AcademicSession, on_delete=models.PROTECT, related_name='result_batches')
     semester = models.CharField(max_length=6, choices=[('FIRST', 'First Semester'), ('SECOND', 'Second Semester')])
     programme_type = models.CharField(max_length=3, choices=[('MSC', 'MSc'), ('PHD', 'PhD')])
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.PENDING)
@@ -41,12 +42,9 @@ class SemesterResultBatch(models.Model):
 
 
 class Result(models.Model):
-    """
-    Stores the score and auto-computed grade for one student in one enrolled course.
-    Triggered to recompute SemesterGPA and CumulativeGPA via post_save signal.
-    """
-    enrollment = models.OneToOneField(Enrollment, on_delete=models.CASCADE, related_name='result')
-    batch = models.ForeignKey(SemesterResultBatch, on_delete=models.CASCADE, related_name='results')
+    """Stores the score and computed grade for one student in one enrolled course."""
+    enrollment = models.OneToOneField(Enrollment, on_delete=models.PROTECT, related_name='result')
+    batch = models.ForeignKey(SemesterResultBatch, on_delete=models.PROTECT, related_name='results')
     score = models.DecimalField(max_digits=5, decimal_places=2)
     grade = models.CharField(max_length=2, editable=False)
     grade_point = models.PositiveSmallIntegerField(editable=False)
@@ -62,15 +60,31 @@ class Result(models.Model):
                 f'{self.score} ({self.grade})')
 
     def save(self, *args, **kwargs):
+        if self.pk:
+            previous_batch_status = type(self).objects.filter(
+                pk=self.pk
+            ).values_list("batch__status", flat=True).first()
+            if previous_batch_status == SemesterResultBatch.Status.APPROVED:
+                raise ValidationError("Results in approved batches are read-only.")
+        if self.batch_id and SemesterResultBatch.objects.filter(
+            pk=self.batch_id,
+            status=SemesterResultBatch.Status.APPROVED,
+        ).exists():
+            raise ValidationError("Results in approved batches are read-only.")
         self.grade = GradingEngine.get_grade(float(self.score))
         self.grade_point = GradingEngine.get_grade_point(float(self.score))
         super().save(*args, **kwargs)
 
+    def delete(self, *args, **kwargs):
+        if self.batch.status == SemesterResultBatch.Status.APPROVED:
+            raise ValidationError("Results in approved batches are read-only.")
+        return super().delete(*args, **kwargs)
+
 
 class SemesterGPA(models.Model):
-    """Computed GPA for one student for one semester. Recalculated on each result save."""
+    """Published GPA for one student for one semester."""
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='semester_gpas')
-    session = models.ForeignKey(AcademicSession, on_delete=models.CASCADE)
+    session = models.ForeignKey(AcademicSession, on_delete=models.PROTECT)
     semester = models.CharField(max_length=6, choices=[('FIRST', 'First Semester'), ('SECOND', 'Second Semester')])
     gpa = models.DecimalField(max_digits=4, decimal_places=2, default=0)
     total_credit_units = models.PositiveSmallIntegerField(default=0)
@@ -88,7 +102,7 @@ class CumulativeGPA(models.Model):
     """Computed CGPA for a student across all approved semesters. One record per student."""
     student = models.OneToOneField(StudentProfile, on_delete=models.CASCADE, related_name='cumulative_gpa')
     cgpa = models.DecimalField(max_digits=4, decimal_places=2, default=0)
-    classification = models.CharField(max_length=15, default='N/A')
+    classification = models.CharField(max_length=30, default='N/A')
     total_credit_units_earned = models.PositiveSmallIntegerField(default=0)
     total_quality_points = models.PositiveSmallIntegerField(default=0)
     last_updated = models.DateTimeField(auto_now=True)

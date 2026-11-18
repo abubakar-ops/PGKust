@@ -11,12 +11,12 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from accounts.models import CustomUser
 from accounts.permissions import IsAdmin, IsActiveStudent, IsActiveLecturer, IsPGCoordinator
 from courses.models import Enrollment, CourseAllocation
 from notifications.utils import notify
 from .models import SemesterResultBatch, Result, SemesterGPA, CumulativeGPA
 from .signals import recompute_gpa_for_batch
+from .services import get_batch_progress
 from .serializers import (
     ResultSerializer, ResultUploadSerializer, SemesterResultBatchSerializer,
     SemesterGPASerializer, CumulativeGPASerializer,
@@ -65,83 +65,71 @@ class StudentGPAView(APIView):
         })
 
 
-def _open_batch_for(allocation):
-    """
-    Return (batch, None) for the allocation's session/semester/programme batch,
-    or (None, error Response) if that batch is approved and locked.
-    """
-    batch, _ = SemesterResultBatch.objects.get_or_create(
-        session=allocation.session,
-        semester=allocation.semester,
-        programme_type=allocation.course.programme.programme_type,
-    )
-    if batch.status == SemesterResultBatch.Status.APPROVED:
-        return None, Response(
-            {"detail": "Results for this semester are already approved and locked."}, status=400)
-    return batch, None
-
-
-def _reopen_if_rejected(batch, uploaded):
-    """A corrected upload sends a rejected batch back to the coordinator's queue —
-    but only if something was actually saved."""
-    if uploaded and batch.status == SemesterResultBatch.Status.REJECTED:
-        batch.status = SemesterResultBatch.Status.PENDING
-        batch.save()
-
-
 class LecturerResultUploadView(APIView):
-    """
-    POST /api/results/upload/  {"allocation": <id>, "results": [{"enrollment": <id>, "score": <0-100>}]}
-    Lecturer enters scores for one of their own allocations. Only APPROVED
-    enrollments in that allocation are accepted; the batch is derived from the
-    allocation so scores can't be filed under another semester.
-    """
+    """POST /api/results/upload/  — lecturer uploads results for a batch."""
     permission_classes = [IsActiveLecturer]
 
     def post(self, request):
-        try:
-            allocation = CourseAllocation.objects.select_related(
-                "course__programme", "session"
-            ).get(pk=request.data.get("allocation"), lecturer=request.user.lecturer_profile)
-        except (CourseAllocation.DoesNotExist, ValueError, TypeError):
-            return Response({"detail": "Allocation not found."}, status=404)
-
+        batch_id = request.data.get("batch")
         results_data = request.data.get("results", [])
         if not isinstance(results_data, list):
-            return Response({"detail": "results must be a list."}, status=400)
-
-        enrollment_map = {
-            e.pk: e for e in Enrollment.objects.filter(
-                allocation=allocation, status=Enrollment.Status.APPROVED)
-        }
+            return Response({"detail": "Results must be provided as a list."}, status=400)
 
         errors = []
         created = 0
         with transaction.atomic():
-            batch, locked = _open_batch_for(allocation)
-            if locked:
-                return locked
+            try:
+                batch = SemesterResultBatch.objects.select_for_update().get(pk=batch_id)
+            except SemesterResultBatch.DoesNotExist:
+                return Response({"detail": "Batch not found."}, status=404)
+
+            if batch.status == SemesterResultBatch.Status.APPROVED:
+                return Response({
+                    "detail": "This batch has already been approved and is read-only."
+                }, status=status.HTTP_409_CONFLICT)
+
+            for item in results_data:
+                if not isinstance(item, dict):
+                    return Response({"detail": "Each result entry must be an object."}, status=400)
+                try:
+                    enrollment = Enrollment.objects.select_related(
+                        "allocation__course__programme", "allocation__session"
+                    ).get(pk=item["enrollment"])
+                except (KeyError, TypeError, ValueError, Enrollment.DoesNotExist):
+                    continue
+                allocation = enrollment.allocation
+                if allocation.lecturer_id != request.user.lecturer_profile.id:
+                    return Response({"detail": "You can only upload results for your own allocation."}, status=403)
+                if enrollment.status != Enrollment.Status.APPROVED:
+                    return Response({"detail": "Results can only be uploaded for approved enrollments."}, status=400)
+                if not (
+                    allocation.session_id == batch.session_id
+                    and allocation.semester == batch.semester
+                    and allocation.course.programme.programme_type == batch.programme_type
+                ):
+                    return Response({"detail": "The enrollment does not belong to this result batch."}, status=400)
+
             for item in results_data:
                 s = ResultUploadSerializer(data=item)
                 if not s.is_valid():
-                    errors.append({"enrollment": item.get("enrollment") if isinstance(item, dict) else None,
-                                   "errors": s.errors})
+                    errors.append({"enrollment": item.get("enrollment"), "errors": s.errors})
                     continue
                 d = s.validated_data
-                enrollment = enrollment_map.get(d["enrollment"])
-                if enrollment is None:
-                    errors.append({"enrollment": d["enrollment"],
-                                   "errors": "No approved enrollment with this id in this course."})
+                try:
+                    enrollment = Enrollment.objects.get(pk=d["enrollment"])
+                except Enrollment.DoesNotExist:
+                    errors.append({"enrollment": d["enrollment"], "errors": "Enrollment not found."})
                     continue
                 Result.objects.update_or_create(
                     enrollment=enrollment,
                     defaults={"score": d["score"], "batch": batch}
                 )
                 created += 1
-            _reopen_if_rejected(batch, created)
+            if created and batch.status == SemesterResultBatch.Status.REJECTED:
+                batch.status = SemesterResultBatch.Status.PENDING
+                batch.save(update_fields=["status"])
 
-        return Response({"uploaded": created, "errors": errors, "batch": batch.id,
-                         "batch_status": batch.status}, status=200)
+        return Response({"uploaded": created, "errors": errors}, status=200)
 
 
 class ScoreSheetTemplateView(APIView):
@@ -249,6 +237,22 @@ class LecturerResultExcelUploadView(APIView):
             return Response({"detail": "Could not read the Excel file. Is it a valid .xlsx?"}, status=400)
         ws = wb.active
 
+        metadata = [str(ws.cell(row=row, column=1).value or "").strip() for row in range(1, 9)]
+        if not any(course_code in line for line in metadata for course_code in [allocation.course.code]):
+            return Response({
+                "detail": f"Wrong course in score sheet. Expected course {allocation.course.code}."
+            }, status=400)
+        session_line = next((line for line in metadata if line.lower().startswith("session:")), "")
+        if allocation.session.name not in session_line:
+            return Response({
+                "detail": f"Wrong academic session in score sheet. Expected {allocation.session.name}."
+            }, status=400)
+        semester_label = allocation.get_semester_display().lower()
+        if semester_label not in session_line.lower():
+            return Response({
+                "detail": f"Wrong semester in score sheet. Expected {allocation.get_semester_display()}."
+            }, status=400)
+
         # Locate the column-header row ("#", "Registration No.", "Name", "CA", "Exam")
         header_row = None
         col_map = {}
@@ -278,10 +282,12 @@ class LecturerResultExcelUploadView(APIView):
             ).select_related("student")
         }
 
-        batch, locked = _open_batch_for(allocation)
-        if locked:
-            return locked
-
+        programme_type = allocation.course.programme.programme_type
+        batch, _ = SemesterResultBatch.objects.get_or_create(
+            session=allocation.session,
+            semester=allocation.semester,
+            programme_type=programme_type,
+        )
         def component(value):
             """Blank cell -> None; otherwise Decimal (may raise InvalidOperation)."""
             if value is None or (isinstance(value, str) and not value.strip()):
@@ -291,6 +297,16 @@ class LecturerResultExcelUploadView(APIView):
         uploaded, errors = 0, []
         seen = set()
         with transaction.atomic():
+            batch = SemesterResultBatch.objects.select_for_update().get(pk=batch.pk)
+            if batch.status == SemesterResultBatch.Status.APPROVED:
+                return Response({
+                    "detail": "This batch has already been approved and is read-only."
+                }, status=status.HTTP_409_CONFLICT)
+            if batch.status == SemesterResultBatch.Status.REJECTED:
+                # A corrected upload sends the batch back to the coordinator's queue.
+                batch.status = SemesterResultBatch.Status.PENDING
+                batch.save(update_fields=["status"])
+
             for row in ws.iter_rows(min_row=header_row + 1):
                 row_no = row[0].row
                 reg = ws.cell(row=row_no, column=col_map["reg"]).value
@@ -312,7 +328,7 @@ class LecturerResultExcelUploadView(APIView):
                 try:
                     ca = component(raw_ca)
                     exam = component(raw_exam)
-                except InvalidOperation:
+                except (InvalidOperation, ValueError):
                     errors.append({"row": row_no, "registration_no": reg_key,
                                    "detail": f"CA/Exam must be numbers (got CA={raw_ca!r}, Exam={raw_exam!r})."})
                     continue
@@ -321,6 +337,10 @@ class LecturerResultExcelUploadView(APIView):
                         "CA is" if ca is None else "Exam is")
                     errors.append({"row": row_no, "registration_no": reg_key,
                                    "detail": f"{missing} empty — fill in both columns."})
+                    continue
+                if not ca.is_finite() or not exam.is_finite():
+                    errors.append({"row": row_no, "registration_no": reg_key,
+                                   "detail": "CA and Exam must be finite numbers."})
                     continue
                 if ca < 0 or exam < 0:
                     errors.append({"row": row_no, "registration_no": reg_key,
@@ -338,7 +358,6 @@ class LecturerResultExcelUploadView(APIView):
                 )
                 seen.add(reg_key)
                 uploaded += 1
-            _reopen_if_rejected(batch, uploaded)
 
         missing = sorted(set(enrollment_map) - seen)
         return Response({
@@ -374,41 +393,68 @@ class ApproveBatchView(APIView):
     permission_classes = [IsPGCoordinator]
 
     def post(self, request, pk):
-        try:
-            batch = SemesterResultBatch.objects.get(pk=pk)
-        except SemesterResultBatch.DoesNotExist:
-            return Response({"detail": "Not found."}, status=404)
-
         action = request.data.get("action")
         comment = request.data.get("comment", "")
-        if action == "approve":
-            if batch.status == SemesterResultBatch.Status.APPROVED:
-                return Response({"detail": "Batch is already approved."}, status=400)
-            if not batch.results.exists():
-                return Response({"detail": "Batch has no results to approve."}, status=400)
-            batch.status = SemesterResultBatch.Status.APPROVED
-            batch.coordinator_comment = comment
-            batch.approved_at = timezone.now()
-            batch.approved_by = request.user
-            batch.save()
-            recompute_gpa_for_batch(batch)
-            # Notify each affected student once, however many courses they took
-            students = CustomUser.objects.filter(
-                student_profile__enrollments__result__batch=batch
-            ).distinct()
-            for user in students:
-                notify(
-                    user,
-                    "Results Published",
-                    f"Your {batch.get_semester_display()} {batch.session.name} results are now available.",
-                    "RESULT",
-                    link="/student/results",
-                )
-            return Response({"detail": "Batch approved and students notified."})
-        elif action == "reject":
-            batch.status = SemesterResultBatch.Status.REJECTED
-            batch.coordinator_comment = comment
-            batch.save()
-            recompute_gpa_for_batch(batch)
-            return Response({"detail": "Batch rejected."})
-        return Response({"detail": "Invalid action."}, status=400)
+        with transaction.atomic():
+            try:
+                batch = SemesterResultBatch.objects.select_for_update().get(pk=pk)
+            except SemesterResultBatch.DoesNotExist:
+                return Response({"detail": "Not found."}, status=404)
+
+            if action == "approve":
+                if batch.status != SemesterResultBatch.Status.PENDING:
+                    return Response({"detail": "Only pending batches can be approved."}, status=400)
+                progress = get_batch_progress(batch)
+                missing = [course for course in progress["courses"] if not course["submitted"]]
+                if not progress["expected_course_count"] or missing:
+                    outstanding = [
+                        {
+                            "course_code": course["course_code"],
+                            "course_title": course["course_title"],
+                            "status": course["status"],
+                            "submitted": course["result_count"],
+                            "expected": course["expected_result_count"],
+                            "missing_students": course["missing_students"],
+                        }
+                        for course in missing
+                    ]
+                    return Response({
+                        "detail": (
+                            "Cannot approve this batch until every course with approved "
+                            "enrollments has submitted all required results."
+                            if progress["expected_course_count"]
+                            else "Cannot approve this batch because it has no course allocations."
+                        ),
+                        "progress": progress,
+                        "outstanding_courses": outstanding,
+                    }, status=400)
+                batch.status = SemesterResultBatch.Status.APPROVED
+                batch.coordinator_comment = comment
+                batch.approved_at = timezone.now()
+                batch.approved_by = request.user
+                batch.save(update_fields=[
+                    "status", "coordinator_comment", "approved_at", "approved_by",
+                ])
+                recompute_gpa_for_batch(batch)
+            elif action == "reject":
+                if batch.status != SemesterResultBatch.Status.PENDING:
+                    return Response({"detail": "Only pending batches can be rejected."}, status=400)
+                batch.status = SemesterResultBatch.Status.REJECTED
+                batch.coordinator_comment = comment
+                batch.save(update_fields=["status", "coordinator_comment"])
+                return Response({"detail": "Batch rejected."})
+            else:
+                return Response({"detail": "Invalid action."}, status=400)
+
+        # Notify only after approval and GPA publication have committed.
+        results = Result.objects.filter(batch=batch).select_related(
+            "enrollment__student__user"
+        )
+        for result in results:
+            notify(
+                result.enrollment.student.user,
+                "Results Published",
+                f"Your {batch.semester} semester {batch.session.name} results are now available.",
+                "RESULT",
+            )
+        return Response({"detail": "Batch approved and students notified."})

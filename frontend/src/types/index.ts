@@ -3,11 +3,41 @@
 export type UserRole = "STUDENT" | "LECTURER" | "ADMIN";
 export type ProgrammeType = "MSC" | "PHD";
 export type ProfileStatus = "PENDING" | "ACTIVE" | "SUSPENDED" | "GRADUATED";
-export type LecturerStatus = "PENDING" | "ACTIVE" | "REJECTED";
 export type Semester = "FIRST" | "SECOND";
 export type PaymentMethod = "ONLINE" | "MANUAL";
 export type PaymentStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type ResultBatchStatus = "PENDING" | "APPROVED" | "REJECTED";
+export interface ResultBatchCourseProgress {
+  allocation: number;
+  course_code: string;
+  course_title: string;
+  programme_name: string;
+  lecturer: string;
+  lecturer_email: string;
+  status: "COMPLETE" | "INCOMPLETE" | "NOT_UPLOADED" | "NO_ENROLLMENTS";
+  submitted: boolean;
+  expected_result_count: number;
+  result_count: number;
+  submitted_results: {
+    matric_number: string;
+    student_name: string;
+    score: string;
+    grade: GradeValue;
+    grade_point: number;
+  }[];
+  missing_students: {
+    matric_number: string;
+    student_name: string;
+  }[];
+}
+
+export interface ResultBatchProgress {
+  expected_course_count: number;
+  submitted_course_count: number;
+  missing_course_count: number;
+  no_enrollment_course_count: number;
+  courses: ResultBatchCourseProgress[];
+}
 export type APRStatus =
   | "DRAFT"
   | "SUBMITTED"
@@ -29,8 +59,40 @@ export interface StudentProfile {
   admission_year: number;
   status: ProfileStatus;
   profile_picture: string | null;
-  supervisor: number | null;
-  supervisor_name: string | null;
+}
+
+export interface StudentReview extends StudentProfile {
+  programme_display: string;
+  registration_note: string;
+  supervisor: {
+    id: number;
+    full_name: string;
+    staff_id: string;
+    specialization: string;
+  } | null;
+  enrollments: {
+    id: number;
+    course_code: string;
+    course_title: string;
+    session_name: string;
+    semester: Semester;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    result: {
+      score: string;
+      grade: string;
+      grade_point: number;
+      batch_status: string;
+    } | null;
+  }[];
+  semester_gpas: SemesterGPA[];
+  cumulative_gpa: CumulativeGPA | null;
+  annual_progress_reports: {
+    id: number;
+    session_name: string;
+    year_of_study: number;
+    status: APRStatus;
+    progression_cleared: boolean;
+  }[];
 }
 
 export interface LecturerProfile {
@@ -42,7 +104,7 @@ export interface LecturerProfile {
   staff_id: string;
   specialization: string;
   is_supervisor: boolean;
-  status: LecturerStatus;
+  status: ProfileStatus;
 }
 
 export interface AdminProfile {
@@ -57,6 +119,8 @@ export interface AuthUser {
   email: string;
   first_name: string;
   last_name: string;
+  phone_number: string;
+  profile_picture: string | null;
   role: UserRole;
   profile: StudentProfile | LecturerProfile | AdminProfile | null;
 }
@@ -67,8 +131,17 @@ export interface AcademicSession {
   id: number;
   name: string;
   is_current: boolean;
+  department_fee: string;
   start_date: string;
   end_date: string;
+}
+
+export interface Programme {
+  id: number;
+  name: string;
+  programme_type: ProgrammeType;
+  duration_years: number;
+  description: string;
 }
 
 export interface Course {
@@ -81,6 +154,7 @@ export interface Course {
   programme_name: string;
   is_elective: boolean;
   is_active: boolean;
+  description: string;
 }
 
 export interface CourseAllocation {
@@ -88,11 +162,29 @@ export interface CourseAllocation {
   course: number;
   course_code: string;
   course_title: string;
+  credit_units: number;
+  programme_name: string;
   lecturer: number;
   lecturer_name: string;
   session: number;
   session_name: string;
   semester: Semester;
+  enrolled_count: number;
+  result_batch_status: ResultBatchStatus | null;
+}
+
+export interface AvailableAllocation {
+  id: number;
+  course: number;
+  course_code: string;
+  course_title: string;
+  credit_units: number;
+  lecturer: number;
+  lecturer_name: string;
+  session: number;
+  session_name: string;
+  semester: Semester;
+  already_enrolled: boolean;
 }
 
 export interface TimetableEntry {
@@ -108,6 +200,8 @@ export interface TimetableEntry {
 export interface Enrollment {
   id: number;
   student: number;
+  student_name: string;
+  matric_number: string;
   allocation: number;
   course_code: string;
   course_title: string;
@@ -120,17 +214,19 @@ export interface Enrollment {
 export interface CourseMaterial {
   id: number;
   allocation: number;
+  course_code: string;
+  course_title: string;
   title: string;
   description: string;
-  /** filename only; download via downloadMaterial() */
   file: string;
-  download_url: string;
+  file_available: boolean;
+  can_delete: boolean;
   uploaded_at: string;
 }
 
 // ─── Results ─────────────────────────────────────────────────────────────────
 
-export type GradeValue = "A" | "B" | "C" | "D" | "F";
+export type GradeValue = "A" | "B" | "C" | "D" | "E" | "F";
 
 export interface Result {
   id: number;
@@ -158,6 +254,7 @@ export interface SemesterResultBatch {
   approved_by: number | null;
   approved_by_name: string | null;
   created_at: string;
+  progress: ResultBatchProgress;
 }
 
 export interface SemesterGPA {

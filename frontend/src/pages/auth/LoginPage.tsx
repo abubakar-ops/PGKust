@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { isAxiosError } from "axios";
 import { useAuth } from "../../context/AuthContext";
 import Alert from "../../components/Alert";
@@ -7,6 +7,8 @@ import Alert from "../../components/Alert";
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const message = (location.state as { message?: string } | null)?.message ?? "";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -37,10 +39,11 @@ export default function LoginPage() {
             <div className="card shadow-sm border-0">
               <div className="card-body p-4">
                 <div className="text-center mb-4">
-                  <h3 className="fw-bold text-primary">KUST CS PGMS</h3>
+                  <h3 className="fw-bold text-primary">ADUST CS PGMS</h3>
                   <p className="text-muted small">Postgraduate Management System</p>
                 </div>
                 <Alert message={error} />
+                <Alert type="success" message={message} />
                 <form onSubmit={(e) => void handleSubmit(e)}>
                   <div className="mb-3">
                     <label className="form-label" htmlFor="email">Email Address</label>
@@ -56,6 +59,9 @@ export default function LoginPage() {
                     {loading ? "Signing in…" : "Sign In"}
                   </button>
                 </form>
+                <p className="text-end small mt-2 mb-0">
+                  <Link to="/forgot-password">Forgot password?</Link>
+                </p>
                 <hr />
                 <p className="text-center small mb-0">
                   <Link to="/register/student">Register as Student</Link>

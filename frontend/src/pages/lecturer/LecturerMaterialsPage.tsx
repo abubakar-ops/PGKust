@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getMyAllocations, getMaterials, uploadMaterial, downloadMaterial } from "../../api/courses";
+import { getMyAllocations, getMaterials, uploadMaterial, deleteMaterial } from "../../api/courses";
+import { isAxiosError } from "axios";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import type { CourseAllocation, CourseMaterial } from "../../types";
 
@@ -28,6 +29,9 @@ export default function LecturerMaterialsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteSuccess, setDeleteSuccess] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -59,10 +63,33 @@ export default function LecturerMaterialsPage() {
       setFile(null);
       if (fileRef.current) fileRef.current.value = "";
       setUploadSuccess("Material uploaded successfully.");
-    } catch {
-      setUploadError("Upload failed. Check file type and size (max 20 MB).");
+    } catch (err: unknown) {
+      if (isAxiosError<{ detail?: string; file?: string[] }>(err)) {
+        const detail = err.response?.data?.detail;
+        const fileError = err.response?.data?.file?.join(", ");
+        setUploadError(detail ?? fileError ?? "Upload failed. Check file type and size (max 20 MB).");
+      } else {
+        setUploadError("Upload failed. Check file type and size (max 20 MB).");
+      }
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleDelete(material: CourseMaterial) {
+    if (!window.confirm(`Delete "${material.title}"? This will permanently remove the uploaded file.`)) return;
+    setDeletingId(material.id);
+    setDeleteError("");
+    setDeleteSuccess("");
+    try {
+      await deleteMaterial(pk, material.id);
+      setMaterials((previous) => previous.filter((item) => item.id !== material.id));
+      setDeleteSuccess("Material deleted successfully.");
+    } catch (err: unknown) {
+      const detail = isAxiosError<{ detail?: string }>(err) ? err.response?.data?.detail : undefined;
+      setDeleteError(detail ?? "Could not delete this material. Please try again.");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -135,6 +162,8 @@ export default function LecturerMaterialsPage() {
       </div>
 
       {/* Materials List */}
+      {deleteError && <div className="alert alert-danger py-2" role="alert">{deleteError}</div>}
+      {deleteSuccess && <div className="alert alert-success py-2" role="status">{deleteSuccess}</div>}
       <div className="card border-0 shadow-sm">
         <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
           <span>Uploaded Materials</span>
@@ -147,10 +176,7 @@ export default function LecturerMaterialsPage() {
         ) : (
           <ul className="list-group list-group-flush">
             {materials.map((m) => (
-              <li
-                key={m.id}
-                className="list-group-item d-flex justify-content-between align-items-center py-3"
-              >
+              <li key={m.id} className="list-group-item d-flex justify-content-between align-items-center py-3 gap-3">
                 <div>
                   <span className="me-2 fs-5">{fileIcon(m.file)}</span>
                   <span className="fw-semibold">{m.title}</span>
@@ -160,13 +186,30 @@ export default function LecturerMaterialsPage() {
                     })}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-primary"
-                  onClick={() => { downloadMaterial(m).catch(() => alert("Download failed.")); }}
-                >
-                  Download
-                </button>
+                <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                  {m.file_available ? (
+                    <a
+                      href={m.file}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-sm btn-outline-primary"
+                    >
+                      Download
+                    </a>
+                  ) : (
+                    <span className="text-danger small">File missing from media storage</span>
+                  )}
+                  {m.can_delete && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-danger"
+                      disabled={deletingId !== null}
+                      onClick={() => void handleDelete(m)}
+                    >
+                      {deletingId === m.id ? "Deleting…" : "Delete"}
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

@@ -15,9 +15,11 @@ function semesterKey(sessionName: string, semester: string) {
 
 function classificationBadge(classification: string) {
   const map: Record<string, string> = {
-    Distinction: "success",
-    Merit: "primary",
-    Pass: "warning",
+    "First Class": "success",
+    "Second Class Upper": "info",
+    "Second Class Lower": "primary",
+    "Third Class": "warning",
+    Pass: "secondary",
     Fail: "danger",
   };
   return map[classification] ?? "secondary";
@@ -127,10 +129,10 @@ export default function StudentResultsPage() {
                   </div>
                   <div className="col-md-3">
                     <div className="text-muted small text-uppercase mb-1">Graduation Standing</div>
-                    {cgpa >= 2.5 ? (
-                      <span className="badge bg-success fs-6">✓ On Track (≥ 2.50)</span>
+                    {cgpa >= 1.0 ? (
+                      <span className="badge bg-success fs-6">✓ On Track (≥ 1.00)</span>
                     ) : (
-                      <span className="badge bg-danger fs-6">Below 2.50 minimum</span>
+                      <span className="badge bg-danger fs-6">Below 1.00 minimum</span>
                     )}
                   </div>
                 </div>

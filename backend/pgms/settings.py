@@ -1,5 +1,4 @@
-﻿import sys
-from pathlib import Path
+﻿from pathlib import Path
 from datetime import timedelta
 from decouple import config, Csv
 
@@ -79,10 +78,6 @@ DATABASES = {
     }
 }
 
-# Tests run against a throwaway local SQLite DB instead of the shared Postgres server.
-if 'test' in sys.argv:
-    DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}
-
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesStandaloneBackend',
     'django.contrib.auth.backends.ModelBackend',
@@ -101,7 +96,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = []
+STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -133,6 +128,7 @@ SIMPLE_JWT = {
     'UPDATE_LAST_LOGIN': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'CHECK_REVOKE_TOKEN': True,
 }
 
 # ─── CORS ────────────────────────────────────────────────────────────────────
@@ -150,13 +146,16 @@ AXES_RESET_ON_SUCCESS = True
 AXES_ENABLE_ADMIN = True
 
 # ─── Email ────────────────────────────────────────────────────────────────────
-EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = config('EMAIL_HOST', default='')
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='KUST CS PGMS <noreply@example.com>')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=EMAIL_HOST_USER)
+PASSWORD_RESET_FRONTEND_URL = config(
+    'PASSWORD_RESET_FRONTEND_URL', default='http://localhost:5173'
+)
 
 # ─── Paystack ─────────────────────────────────────────────────────────────────
 PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY', default='')
@@ -164,7 +163,6 @@ PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY', default='')
 
 ALLOWED_MATERIAL_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.zip', '.rar']
 MAX_UPLOAD_SIZE_MB = 20
-MAX_CREDIT_UNITS_PER_SEMESTER = config('MAX_CREDIT_UNITS_PER_SEMESTER', default=24, cast=int)
 
 # ─── Production hardening ─────────────────────────────────────────────────────
 if not DEBUG:

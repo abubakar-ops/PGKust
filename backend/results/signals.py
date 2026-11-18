@@ -1,5 +1,3 @@
-from django.db.models.signals import post_save
-from django.dispatch import receiver
 from .grading import GradingEngine
 
 
@@ -86,17 +84,3 @@ def recompute_gpa_for_batch(batch):
             continue
         seen.add(key)
         recompute_gpa(student, session, semester)
-
-
-@receiver(post_save, sender='results.Result')
-def recompute_gpa_on_result_save(sender, instance, **kwargs):
-    """
-    After any Result is saved, recompute GPAs for the affected student.
-    Because only APPROVED-batch results are counted, saving a result into a
-    pending batch does not change what the student sees.
-    """
-    recompute_gpa(
-        instance.enrollment.student,
-        instance.enrollment.allocation.session,
-        instance.enrollment.allocation.semester,
-    )
