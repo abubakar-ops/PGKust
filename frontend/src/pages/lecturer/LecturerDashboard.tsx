@@ -2,19 +2,25 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { getMyAllocations, getTimetable } from "../../api/courses";
+import { getSupervisedStudents } from "../../api/auth";
 import LoadingSpinner from "../../components/LoadingSpinner";
-import type { CourseAllocation, TimetableEntry, LecturerProfile } from "../../types";
+import type { CourseAllocation, TimetableEntry, LecturerProfile, StudentProfile } from "../../types";
 
 export default function LecturerDashboard() {
   const { user } = useAuth();
   const [allocations, setAllocations] = useState<CourseAllocation[]>([]);
   const [timetable, setTimetable] = useState<TimetableEntry[]>([]);
+  const [supervisedStudents, setSupervisedStudents] = useState<StudentProfile[]>([]);
+  const [supervisedStudentsError, setSupervisedStudentsError] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     void Promise.all([
       getMyAllocations().then(({ data }) => setAllocations(data)).catch(() => { /* none */ }),
       getTimetable().then(({ data }) => setTimetable(data)).catch(() => { /* none */ }),
+      getSupervisedStudents()
+        .then(({ data }) => setSupervisedStudents(data))
+        .catch(() => setSupervisedStudentsError("Could not load your assigned students.")),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -24,8 +30,8 @@ export default function LecturerDashboard() {
 
   return (
     <div className="container py-4">
-      <h4 className="fw-bold mb-1">Welcome, {user?.first_name}</h4>
-      <p className="text-muted">{profile?.staff_id} · Lecturer</p>
+      <h4 className="fw-bold mb-1 text-white">Welcome, {user?.first_name}</h4>
+      <p className="text-white">{profile?.staff_id} · Lecturer</p>
 
       <div className="row g-3 mb-4">
         <div className="col-md-4">
@@ -86,6 +92,35 @@ export default function LecturerDashboard() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="card border-0 shadow-sm mt-4">
+        <div className="card-header bg-white fw-bold">My Supervised Students</div>
+        {supervisedStudentsError ? (
+          <div className="card-body text-danger">{supervisedStudentsError}</div>
+        ) : (
+          <div className="table-responsive">
+            <table className="table table-hover align-middle mb-0">
+              <thead className="table-light">
+                <tr><th>Name</th><th>Matric No.</th><th>Programme</th><th>Email</th><th>Phone</th></tr>
+              </thead>
+              <tbody>
+                {supervisedStudents.map((student) => (
+                  <tr key={student.id}>
+                    <td>{student.full_name}</td>
+                    <td>{student.matric_number}</td>
+                    <td>{student.programme}</td>
+                    <td>{student.email}</td>
+                    <td>{student.phone_number || "—"}</td>
+                  </tr>
+                ))}
+                {supervisedStudents.length === 0 && (
+                  <tr><td colSpan={5} className="text-center text-muted">No students are currently assigned to you.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -59,7 +59,7 @@ export default function LecturerRegisterPage() {
           <div className="card shadow-sm border-0">
             <div className="card-body p-4">
               <h4 className="fw-bold mb-1">Lecturer Registration</h4>
-              <p className="text-muted small mb-3">KUST CS Postgraduate Programme</p>
+              <p className="text-muted small mb-3">ADUST CS Postgraduate Programme</p>
               <Alert type="danger" message={error} />
               <Alert type="success" message={success} />
               <form onSubmit={(e) => void handleSubmit(e)}>
@@ -97,7 +97,7 @@ export default function LecturerRegisterPage() {
                         checked={form.is_supervisor}
                         onChange={(e) => setForm((f) => ({ ...f, is_supervisor: e.target.checked }))}
                       />
-                      <label className="form-check-label" htmlFor="is_supervisor">Available as Supervisor</label>
+                      <label className="form-check-label" htmlFor="is_supervisor">Available as postgraduate supervisor</label>
                     </div>
                   </div>
                   <div className="col-md-6">

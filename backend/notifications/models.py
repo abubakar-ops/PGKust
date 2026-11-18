@@ -11,6 +11,7 @@ class Notification(models.Model):
         APR = 'APR', _('Annual Progress Report')
         FEE = 'FEE', _('Fee Payment')
         MATERIAL = 'MATERIAL', _('Course Material')
+        SUPERVISOR = 'SUPERVISOR', _('Supervisor Assignment')
         GENERAL = 'GENERAL', _('General')
 
     recipient = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='notifications')

@@ -8,9 +8,6 @@ class AcademicSession(models.Model):
     is_current = models.BooleanField(default=False)
     start_date = models.DateField()
     end_date = models.DateField()
-    department_fee = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0,
-        help_text='Annual department fee (NGN) students must pay for this session')
 
     class Meta:
         ordering = ['-start_date']
@@ -22,10 +19,6 @@ class AcademicSession(models.Model):
         if self.is_current:
             AcademicSession.objects.exclude(pk=self.pk).update(is_current=False)
         super().save(*args, **kwargs)
-
-    @classmethod
-    def current(cls):
-        return cls.objects.filter(is_current=True).first()
 
 
 class Programme(models.Model):
@@ -147,6 +140,7 @@ def material_upload_path(instance, filename):
 
 class CourseMaterial(models.Model):
     allocation = models.ForeignKey(CourseAllocation, on_delete=models.CASCADE, related_name='materials')
+    uploader = models.ForeignKey(LecturerProfile, on_delete=models.CASCADE, related_name='uploaded_materials')
     title = models.CharField(max_length=200)
     file = models.FileField(upload_to=material_upload_path)
     description = models.TextField(blank=True)

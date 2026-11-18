@@ -8,7 +8,6 @@ urlpatterns = [
     path("pay/manual/",                views.ManualPaymentView.as_view(),            name="pay_manual"),
     path("pay/online/initialize/",     views.InitiateOnlinePaymentView.as_view(),   name="pay_online_init"),
     path("webhook/paystack/",          views.PaystackWebhookView.as_view(),          name="paystack_webhook"),
-    path("<int:pk>/receipt/",          views.ReceiptDownloadView.as_view(),          name="receipt_download"),
     path("admin/list/",                views.AdminFeeListView.as_view(),             name="admin_fee_list"),
     path("admin/<int:pk>/approve/",    views.AdminApproveFeeView.as_view(),          name="admin_approve_fee"),
 ]

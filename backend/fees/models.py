@@ -18,8 +18,7 @@ class FeePayment(models.Model):
         MANUAL = 'MANUAL', _('Manual (Bank Receipt Upload)')
 
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='fee_payments')
-    # Holds AcademicSession.name, so it must be at least as long as that field.
-    academic_year = models.CharField(max_length=20, help_text='e.g. 2024/2025')
+    academic_year = models.CharField(max_length=9, help_text='e.g. 2024/2025')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_method = models.CharField(max_length=6, choices=PaymentMethod.choices)
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.PENDING)

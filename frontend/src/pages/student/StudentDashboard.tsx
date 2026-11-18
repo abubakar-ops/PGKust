@@ -7,11 +7,11 @@ import { getMyEnrollments } from "../../api/courses";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import type { GPAResponse, FeePayment, Enrollment, StudentProfile } from "../../types";
 
-function CGPABadge({ cgpa }: { cgpa: string | undefined }) {
+function CGPABadge({ cgpa, classification }: { cgpa: string | undefined; classification?: string }) {
   if (!cgpa) return <span className="text-muted">—</span>;
   const val = parseFloat(cgpa);
-  const cls = val >= 4.5 ? "success" : val >= 3.5 ? "info" : val >= 2.5 ? "warning" : "danger";
-  const label = val >= 4.5 ? "Distinction" : val >= 3.5 ? "Merit" : val >= 2.5 ? "Pass" : "Fail";
+  const cls = val >= 4.5 ? "success" : val >= 3.5 ? "info" : val >= 2.4 ? "primary" : val >= 1.5 ? "warning" : val >= 1.0 ? "secondary" : "danger";
+  const label = classification || (val >= 4.5 ? "First Class" : val >= 3.5 ? "Second Class Upper" : val >= 2.4 ? "Second Class Lower" : val >= 1.5 ? "Third Class" : val >= 1.0 ? "Pass" : "Fail");
   return (
     <span className={`badge bg-${cls} fs-6`}>
       {val.toFixed(2)} — {label}
@@ -42,15 +42,42 @@ export default function StudentDashboard() {
 
   return (
     <div className="container py-4">
-      <h4 className="fw-bold mb-1">Welcome, {user?.first_name}</h4>
-      <p className="text-muted">{profile?.matric_number} · {profile?.programme}</p>
+      <h4 className="fw-bold mb-1 text-white">Welcome, {user?.first_name}</h4>
+      <p className="text-white">{profile?.matric_number} · {profile?.programme}</p>
+
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-bold">Quick Links</div>
+        <div className="card-body d-flex flex-wrap gap-2">
+          <Link to="/student/timetable" className="btn btn-outline-secondary btn-sm">Timetable</Link>
+          <Link to="/student/results" className="btn btn-outline-secondary btn-sm">Results</Link>
+          {profile?.programme === "PHD" && (
+            <Link to="/student/apr" className="btn btn-outline-secondary btn-sm">Annual Progress Report</Link>
+          )}
+          <Link to="/student/enroll" className="btn btn-outline-secondary btn-sm">Enroll in Courses</Link>
+        </div>
+      </div>
+
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-bold">Academic Supervisor</div>
+        <div className="card-body">
+          {profile?.supervisor_name ? (
+            <>
+              <div className="fw-semibold">{profile.supervisor_name}</div>
+              {profile.supervisor_email && <div>{profile.supervisor_email}</div>}
+              {profile.supervisor_phone_number && <div>{profile.supervisor_phone_number}</div>}
+            </>
+          ) : (
+            <p className="text-muted mb-0">No supervisor has been assigned yet.</p>
+          )}
+        </div>
+      </div>
 
       <div className="row g-3 mb-4">
         <div className="col-md-4">
           <div className="card border-0 shadow-sm h-100">
             <div className="card-body">
               <h6 className="text-muted">CGPA</h6>
-              <CGPABadge cgpa={gpa?.cumulative?.cgpa} />
+              <CGPABadge cgpa={gpa?.cumulative?.cgpa} classification={gpa?.cumulative?.classification} />
               <div className="mt-2">
                 <Link to="/student/gpa" className="btn btn-sm btn-outline-primary">View GPA →</Link>
               </div>
@@ -80,18 +107,6 @@ export default function StudentDashboard() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-bold">Quick Links</div>
-        <div className="card-body d-flex flex-wrap gap-2">
-          <Link to="/student/timetable" className="btn btn-outline-secondary btn-sm">Timetable</Link>
-          <Link to="/student/results" className="btn btn-outline-secondary btn-sm">Results</Link>
-          {profile?.programme === "PHD" && (
-            <Link to="/student/apr" className="btn btn-outline-secondary btn-sm">Annual Progress Report</Link>
-          )}
-          <Link to="/student/courses" className="btn btn-outline-secondary btn-sm">Enroll in Courses</Link>
         </div>
       </div>
     </div>

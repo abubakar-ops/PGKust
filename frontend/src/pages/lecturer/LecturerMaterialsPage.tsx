@@ -1,8 +1,31 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getMyAllocations, getMaterials, uploadMaterial, downloadMaterial } from "../../api/courses";
+import { isAxiosError } from "axios";
+import { deleteMaterial, getMyAllocations, getMaterials, uploadMaterial } from "../../api/courses";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import type { CourseAllocation, CourseMaterial } from "../../types";
+
+function requestFailureMessage(error: unknown, fallback: string) {
+  if (isAxiosError<{ detail?: unknown; errors?: unknown }>(error)) {
+    const response = error.response?.data;
+    const detail = response?.detail ?? response?.errors;
+    if (typeof detail === "string") return detail;
+    if (detail && typeof detail === "object") {
+      const messages = Object.values(detail).flatMap((value) =>
+        Array.isArray(value) ? value : [value],
+      );
+      const message = messages.find((value): value is string => typeof value === "string");
+      if (message) return message;
+    }
+    if (error.response) {
+      return `Request failed with HTTP ${error.response.status}. Check the server logs for details.`;
+    }
+    if (error.request) {
+      return "No response received from the server. Check that the backend is running and try again.";
+    }
+  }
+  return fallback;
+}
 
 function fileIcon(filename: string) {
   const ext = filename.split(".").pop()?.toLowerCase();
@@ -24,10 +47,13 @@ export default function LecturerMaterialsPage() {
   const [pageError, setPageError] = useState("");
 
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -53,16 +79,32 @@ export default function LecturerMaterialsPage() {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("title", title.trim() || file.name);
+      fd.append("description", description.trim());
       const { data } = await uploadMaterial(pk, fd);
       setMaterials((prev) => [data, ...prev]);
       setTitle("");
+      setDescription("");
       setFile(null);
       if (fileRef.current) fileRef.current.value = "";
       setUploadSuccess("Material uploaded successfully.");
-    } catch {
-      setUploadError("Upload failed. Check file type and size (max 20 MB).");
+    } catch (error: unknown) {
+      setUploadError(requestFailureMessage(error, "Upload could not be completed. Please try again."));
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleDelete(material: CourseMaterial) {
+    if (!window.confirm(`Delete "${material.title}"? This also removes its file.`)) return;
+    setDeletingId(material.id);
+    setDeleteError("");
+    try {
+      await deleteMaterial(pk, material.id);
+      setMaterials((prev) => prev.filter((item) => item.id !== material.id));
+    } catch (error: unknown) {
+      setDeleteError(requestFailureMessage(error, "Could not delete this material. Please try again."));
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -77,10 +119,7 @@ export default function LecturerMaterialsPage() {
   return (
     <div className="container py-4" style={{ maxWidth: 800 }}>
       <nav aria-label="breadcrumb" className="mb-3">
-        <ol className="breadcrumb">
-          <li className="breadcrumb-item"><Link to="/lecturer/dashboard">Dashboard</Link></li>
-          <li className="breadcrumb-item active">Course Materials</li>
-        </ol>
+       <h4 className="fw-bold mb-0 text-white">Course Materials</h4>
       </nav>
 
       <div className="card border-0 shadow-sm mb-4">
@@ -113,6 +152,16 @@ export default function LecturerMaterialsPage() {
               />
             </div>
             <div className="mb-3">
+              <label className="form-label">Description <span className="text-muted small">(optional)</span></label>
+              <textarea
+                className="form-control"
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Add details about this material"
+              />
+            </div>
+            <div className="mb-3">
               <label className="form-label">File <span className="text-danger">*</span></label>
               <input
                 ref={fileRef}
@@ -140,6 +189,7 @@ export default function LecturerMaterialsPage() {
           <span>Uploaded Materials</span>
           <span className="badge bg-secondary">{materials.length}</span>
         </div>
+        {deleteError && <div className="alert alert-danger m-3 mb-0">{deleteError}</div>}
         {materials.length === 0 ? (
           <div className="card-body text-center text-muted py-4">
             No materials uploaded yet for this course.
@@ -154,19 +204,41 @@ export default function LecturerMaterialsPage() {
                 <div>
                   <span className="me-2 fs-5">{fileIcon(m.file)}</span>
                   <span className="fw-semibold">{m.title}</span>
+                  {m.description && (
+                    <div className="text-muted small ms-4" style={{ whiteSpace: "pre-wrap" }}>
+                      {m.description}
+                    </div>
+                  )}
                   <div className="text-muted small ms-4">
                     Uploaded {new Date(m.uploaded_at).toLocaleDateString("en-GB", {
                       day: "numeric", month: "short", year: "numeric",
                     })}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-primary"
-                  onClick={() => { downloadMaterial(m).catch(() => alert("Download failed.")); }}
-                >
-                  Download
-                </button>
+                <div className="d-flex align-items-center gap-2">
+                  {m.file_available ? (
+                    <a
+                      href={m.file}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-sm btn-outline-primary"
+                    >
+                      Download
+                    </a>
+                  ) : (
+                    <span className="text-danger small" title="The file is missing from server storage.">
+                      File missing — re-upload
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-danger"
+                    disabled={deletingId === m.id}
+                    onClick={() => { void handleDelete(m); }}
+                  >
+                    {deletingId === m.id ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

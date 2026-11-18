@@ -30,15 +30,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-vh-100 d-flex align-items-center bg-light">
+    <div className="auth-page min-vh-100 d-flex align-items-center">
       <div className="container">
         <div className="row justify-content-center">
           <div className="col-md-5">
-            <div className="card shadow-sm border-0">
-              <div className="card-body p-4">
+            <div className="card auth-card shadow-lg border-0">
+              <div className="card-body p-4 p-lg-5">
                 <div className="text-center mb-4">
-                  <h3 className="fw-bold text-primary">KUST CS PGMS</h3>
-                  <p className="text-muted small">Postgraduate Management System</p>
+                  <img src="/campus-gate.svg" alt="ADUST campus logo" className="school-logo mb-3" />
+                  <h3 className="fw-bold text-primary mb-1">ADUST</h3>
+                  <p className="text-muted small mb-0">Computer Science Postgraduate Management System</p>
                 </div>
                 <Alert message={error} />
                 <form onSubmit={(e) => void handleSubmit(e)}>

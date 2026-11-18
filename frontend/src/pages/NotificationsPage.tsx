@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { getNotifications, markRead, markAllRead } from "../api/notifications";
 import LoadingSpinner from "../components/LoadingSpinner";
 import type { Notification } from "../types";
@@ -8,6 +9,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const { loadUser } = useAuth();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -24,6 +26,7 @@ export default function NotificationsPage() {
 
   const handleOpen = (n: Notification) => {
     if (!n.is_read) void markRead(n.id).then(load);
+    void loadUser();
     if (n.link) navigate(n.link);
   };
 
